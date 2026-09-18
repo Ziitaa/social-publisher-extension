@@ -1,14 +1,14 @@
 {
   "extensionName": {
-    "message": "MultiPost",
+    "message": "Social Publisher Safe",
     "description": "Multipost Extension"
   },
   "extensionDisplayName": {
-    "message": "MultiPost",
+    "message": "Social Publisher Safe",
     "description": "Multipost Extension"
   },
   "extensionDescription": {
-    "message": "MultiPost is a tool to help you sync and publish content across multiple platforms.",
+    "message": "Safe publishing edition: fill-only by default; Xiaohongshu auto-submit is disabled.",
     "description": "MultiPost is a tool to help you sync and publish content across multiple platforms."
   },
   "gDynamic": {
@@ -56,7 +56,7 @@
     "description": "Default nickname text"
   },
   "optionsTitle": {
-    "message": "Multipost",
+    "message": "Social Publisher Safe",
     "description": "Options page title"
   },
   "optionsViewDocs": {
