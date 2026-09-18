@@ -2,6 +2,7 @@ import "~style.css";
 import { HeroUIProvider, Tab, Tabs } from "@heroui/react";
 import { FileText, Image as ImageIcon, Settings as SettingsIcon, Video } from "lucide-react";
 import type React from "react";
+import ArticleTab from "~components/Sync/ArticleTab";
 import DynamicTab from "~components/Sync/DynamicTab";
 import SettingsTab from "~components/Sync/SettingsTab";
 import VideoTab from "~components/Sync/VideoTab";
@@ -12,6 +13,48 @@ const publish = (data: SyncData) => {
     action: "MULTIPOST_EXTENSION_PUBLISH",
     data,
   });
+};
+
+const waitForTabComplete = (tabId: number, timeoutMs = 20000) =>
+  new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error("页面加载超时"));
+    }, timeoutMs);
+
+    const listener = (updatedTabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") {
+        window.clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        resolve();
+      }
+    };
+
+    chrome.tabs.onUpdated.addListener(listener);
+  });
+
+const scrapePage = async (url: string) => {
+  const tab = await chrome.tabs.create({ url, active: false });
+  if (!tab.id) {
+    throw new Error("无法创建内容导入标签页");
+  }
+
+  try {
+    if (tab.status !== "complete") {
+      await waitForTabComplete(tab.id);
+    }
+
+    const result = await chrome.tabs.sendMessage(tab.id, {
+      type: "MULTIPOST_EXTENSION_REQUEST_SCRAPER_START",
+    });
+
+    if (!result || result.error) {
+      throw new Error(result?.error || "无法读取该页面内容");
+    }
+    return result;
+  } finally {
+    await chrome.tabs.remove(tab.id).catch(() => undefined);
+  }
 };
 
 const App: React.FC = () => {
@@ -60,14 +103,15 @@ const App: React.FC = () => {
 
             <Tab
               key="article"
-              isDisabled
               title={
                 <div className="flex items-center gap-2">
                   <FileText className="size-4" />
-                  <span>长文（下一阶段）</span>
+                  <span>长文</span>
                 </div>
               }>
-              <div />
+              <div className="pt-4">
+                <ArticleTab funcPublish={publish} funcScraper={scrapePage} />
+              </div>
             </Tab>
 
             <Tab
