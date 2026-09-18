@@ -1,14 +1,14 @@
 {
   "extensionName": {
-    "message": "Social Publisher Safe",
+    "message": "Social Publisher",
     "description": "Multipost Extension"
   },
   "extensionDisplayName": {
-    "message": "Social Publisher Safe",
+    "message": "Social Publisher",
     "description": "Multipost Extension"
   },
   "extensionDescription": {
-    "message": "安全发布版：默认仅填充，小红书禁止自动提交。",
+    "message": "独立安全发布版：本地工作台，默认仅填充，小红书禁止自动提交。",
     "description": "Multipost 是一个帮助你在多个平台同步发布内容的工具。"
   },
   "gDynamic": {
@@ -56,7 +56,7 @@
     "description": "默认昵称文本"
   },
   "optionsTitle": {
-    "message": "Social Publisher Safe",
+    "message": "Social Publisher",
     "description": "选项页面标题"
   },
   "optionsViewDocs": {
@@ -576,7 +576,7 @@
     "description": "清空所有已选择平台的按钮文本"
   },
   "aboutDescription": {
-    "message": "MultiPost Extension 帮助您同时将内容发布到多个平台，提高内容分发效率。"
+    "message": "Social Publisher 是独立的本地多平台发布工作台。"
   },
   "gAbout": {
     "message": "关于"
@@ -789,7 +789,7 @@
     "message": "处理请求时发生错误"
   },
   "popupLogoAlt": {
-    "message": "MultiPost 图标",
+    "message": "Social Publisher",
     "description": "Logo 图片的替代文本"
   },
   "popupLoadingMessage": {
@@ -938,7 +938,7 @@
     "message": "保存"
   },
   "linkExtensionTitle": {
-    "message": "连接扩展到 MultiPost.app",
+    "message": "外部网页连接已停用",
     "description": "连接扩展页面标题"
   },
   "linkExtensionReject": {
