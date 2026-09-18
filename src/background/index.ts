@@ -20,20 +20,25 @@ const storage = new Storage({
   area: "local",
 });
 
-async function initDefaultTrustedDomains() {
-  const trustedDomains = await storage.get<Array<{ id: string; domain: string }>>("trustedDomains");
-  if (!trustedDomains) {
-    await storage.set("trustedDomains", []);
-  }
+async function initLocalSecurityState() {
+  const trustedDomains = (await storage.get<Array<{ id: string; domain: string }>>("trustedDomains")) || [];
+  const localDomains = trustedDomains.filter(({ domain }) => domain !== "multipost.app" && !domain.endsWith(".multipost.app"));
+  await storage.set("trustedDomains", localDomains);
+
+  // Legacy SaaS credentials are not used by the standalone fork.
+  await storage.remove("apiKey");
+  await storage.remove("extensionClientId");
 }
 
 chrome.runtime.onInstalled.addListener((object) => {
   if (object.reason === chrome.runtime.OnInstalledReason.INSTALL) {
     chrome.runtime.openOptionsPage();
   }
-  initDefaultTrustedDomains();
+  initLocalSecurityState();
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 });
+
+initLocalSecurityState();
 
 // Listen Message || 监听消息 || START
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
