@@ -1,38 +1,92 @@
 import "~style.css";
-import cssText from "data-text:~style.css";
-import type { PlasmoCSConfig } from "plasmo";
-import { useEffect } from "react";
+import { HeroUIProvider, Tab, Tabs } from "@heroui/react";
+import { FileText, Image as ImageIcon, Settings as SettingsIcon, Video } from "lucide-react";
+import type React from "react";
+import DynamicTab from "~components/Sync/DynamicTab";
+import SettingsTab from "~components/Sync/SettingsTab";
+import VideoTab from "~components/Sync/VideoTab";
+import type { SyncData } from "~sync/common";
 
-export const config: PlasmoCSConfig = {
-  // matches: ["https://www.plasmo.com/*"]
+const publish = (data: SyncData) => {
+  chrome.runtime.sendMessage({
+    action: "MULTIPOST_EXTENSION_PUBLISH",
+    data,
+  });
 };
 
-export function getShadowContainer() {
-  return document.querySelector("#test-shadow").shadowRoot.querySelector("#plasmo-shadow-container");
-}
+const App: React.FC = () => {
+  return (
+    <HeroUIProvider>
+      <main className="min-h-screen bg-background text-foreground">
+        <header className="sticky top-0 z-20 border-b border-divider bg-background/95 backdrop-blur">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+            <div>
+              <div className="text-xl font-semibold">Social Publisher</div>
+              <div className="text-xs text-default-500">本地发布工作台 · 默认仅填充 · 小红书固定仅填充</div>
+            </div>
+            <div className="rounded-full bg-warning-100 px-3 py-1 text-xs text-warning-700">
+              Safe Publish
+            </div>
+          </div>
+        </header>
 
-export const getShadowHostId = () => "test-shadow";
+        <section className="mx-auto max-w-7xl px-6 py-6">
+          <Tabs aria-label="Social Publisher" variant="underlined" color="primary">
+            <Tab
+              key="dynamic"
+              title={
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="size-4" />
+                  <span>图文 / 动态</span>
+                </div>
+              }>
+              <div className="pt-4">
+                <DynamicTab funcPublish={publish} />
+              </div>
+            </Tab>
 
-const BASE_URL = "https://multipost.app";
+            <Tab
+              key="video"
+              title={
+                <div className="flex items-center gap-2">
+                  <Video className="size-4" />
+                  <span>视频</span>
+                </div>
+              }>
+              <div className="pt-4">
+                <VideoTab funcPublish={publish} />
+              </div>
+            </Tab>
 
-export const getStyle = () => {
-  const style = document.createElement("style");
+            <Tab
+              key="article"
+              isDisabled
+              title={
+                <div className="flex items-center gap-2">
+                  <FileText className="size-4" />
+                  <span>长文（下一阶段）</span>
+                </div>
+              }>
+              <div />
+            </Tab>
 
-  style.textContent = cssText;
-  return style;
+            <Tab
+              key="settings"
+              title={
+                <div className="flex items-center gap-2">
+                  <SettingsIcon className="size-4" />
+                  <span>设置</span>
+                </div>
+              }>
+              <div className="pt-4">
+                <SettingsTab />
+              </div>
+            </Tab>
+          </Tabs>
+        </section>
+      </main>
+    </HeroUIProvider>
+  );
 };
 
-const Options = () => {
-  useEffect(() => {
-    chrome.tabs.getCurrent((tab) => {
-      chrome.tabs.create({ url: `${BASE_URL}/dashboard/publish` });
-      if (tab?.id) {
-        chrome.tabs.remove(tab.id);
-      }
-    });
-  }, []);
-
-  return <div />;
-};
-
-export default Options;
+export default App;
