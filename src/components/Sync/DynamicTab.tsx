@@ -8,7 +8,6 @@ import {
   CardHeader,
   Image,
   Input,
-  Switch,
   Textarea,
 } from "@heroui/react";
 import { Eraser, FileImageIcon, FileVideo2Icon, SendIcon, TrashIcon, XIcon } from "lucide-react";
