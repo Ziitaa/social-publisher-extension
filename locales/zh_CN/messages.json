@@ -1,14 +1,14 @@
 {
   "extensionName": {
-    "message": "MultiPost",
+    "message": "Social Publisher Safe",
     "description": "Multipost Extension"
   },
   "extensionDisplayName": {
-    "message": "MultiPost",
+    "message": "Social Publisher Safe",
     "description": "Multipost Extension"
   },
   "extensionDescription": {
-    "message": "MultiPost 是一个帮助你在多个平台同步发布内容的工具。",
+    "message": "安全发布版：默认仅填充，小红书禁止自动提交。",
     "description": "Multipost 是一个帮助你在多个平台同步发布内容的工具。"
   },
   "gDynamic": {
@@ -56,7 +56,7 @@
     "description": "默认昵称文本"
   },
   "optionsTitle": {
-    "message": "Multipost",
+    "message": "Social Publisher Safe",
     "description": "选项页面标题"
   },
   "optionsViewDocs": {
