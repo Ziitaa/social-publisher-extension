@@ -31,8 +31,8 @@ git fetch origin
 git checkout $Branch
 git pull --ff-only origin $Branch
 
-pnpm install
-pnpm build
+pnpm.cmd install
+pnpm.cmd build
 
 $BuildDir = Join-Path $Target "build\chrome-mv3-prod"
 if (-not (Test-Path $BuildDir)) {
