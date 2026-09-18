@@ -5,9 +5,12 @@ import { getExtraConfigFromPlatformInfo, getExtraConfigFromPlatformInfos } from 
 import { PodcastInfoMap } from "./podcast";
 import { VideoInfoMap } from "./video";
 
+export type PublishMode = "fill" | "auto";
+
 export interface SyncDataPlatform {
   name: string;
   injectUrl?: string;
+  publishMode?: PublishMode;
   extraConfig?:
     | {
         customInjectUrls?: string[]; // Beta 功能，用于自定义注入 URL
@@ -109,6 +112,24 @@ export const infoMap: Record<string, PlatformInfo> = {
   ...VideoInfoMap,
   ...PodcastInfoMap,
 };
+
+export function isForcedFillPlatform(platformName: string): boolean {
+  return platformName.includes("REDNOTE");
+}
+
+export function getPlatformPublishMode(platform: SyncDataPlatform): PublishMode {
+  if (isForcedFillPlatform(platform.name)) return "fill";
+  return platform.publishMode === "auto" ? "auto" : "fill";
+}
+
+export function getPlatformSyncData(data: SyncData, platform: SyncDataPlatform): SyncData {
+  const publishMode = getPlatformPublishMode(platform);
+  return {
+    ...data,
+    platforms: [{ ...platform, publishMode }],
+    isAutoPublish: publishMode === "auto",
+  };
+}
 
 export async function getPlatformInfo(platform: string): Promise<PlatformInfo | null> {
   const platformInfo = infoMap[platform];
@@ -218,7 +239,7 @@ export async function injectScriptsToTabs(
               chrome.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: info.injectFunction,
-                args: [data],
+                args: [getPlatformSyncData(data, platform)],
               });
             }
           });
