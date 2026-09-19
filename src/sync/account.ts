@@ -18,7 +18,7 @@ import { getYidianAccountInfo } from "./account/yidian";
 import { type AccountInfo, type PlatformInfo, getPlatformInfos } from "./common";
 
 // 存储账号信息的键名
-export const ACCOUNT_INFO_STORAGE_KEY = "multipost_account_info";
+export const ACCOUNT_INFO_STORAGE_KEY = "social_publisher_account_info";
 
 // 初始化 storage 实例
 const storage = new Storage({
