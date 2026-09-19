@@ -19,9 +19,9 @@ import { Storage } from "@plasmohq/storage";
 import { useStorage } from "@plasmohq/storage/hook";
 import { ACCOUNT_INFO_STORAGE_KEY } from "~sync/account";
 // import ReactPlayer from 'react-player';
-import type { FileData, SyncData } from "~sync/common";
+import type { FileData, PublishMode, SyncData } from "~sync/common";
 import type { PlatformInfo } from "~sync/common";
-import { getPlatformInfos } from "~sync/common";
+import { getPlatformInfos, isForcedFillPlatform } from "~sync/common";
 import { EXTRA_CONFIG_STORAGE_KEY } from "~sync/extraconfig";
 import PlatformCheckbox from "./PlatformCheckbox";
 
@@ -35,6 +35,7 @@ const VideoTab: React.FC<VideoTabProps> = ({ funcPublish }) => {
   const [videoFile, setVideoFile] = useState<FileData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+  const [platformModes, setPlatformModes] = useState<Record<string, PublishMode>>({});
   const [platforms, setPlatforms] = useState<PlatformInfo[]>([]);
   const storage = new Storage({
     area: "local", // 明确指定使用 localStorage
@@ -95,6 +96,11 @@ const VideoTab: React.FC<VideoTabProps> = ({ funcPublish }) => {
       ? [...selectedPlatforms, platform]
       : selectedPlatforms.filter((p) => p !== platform);
     setSelectedPlatforms(newSelectedPlatforms);
+    if (isSelected && !platformModes[platform]) {
+      const nextModes = { ...platformModes, [platform]: "fill" as PublishMode };
+      setPlatformModes(nextModes);
+      await storage.set("videoPlatformModes", nextModes);
+    }
     await storage.set("videoPlatforms", newSelectedPlatforms);
   };
 
@@ -103,9 +109,20 @@ const VideoTab: React.FC<VideoTabProps> = ({ funcPublish }) => {
     await storage.set("videoPlatforms", []);
   };
 
+  const handlePublishModeChange = async (platform: string, mode: PublishMode) => {
+    if (isForcedFillPlatform(platform)) return;
+    const nextModes = { ...platformModes, [platform]: mode };
+    setPlatformModes(nextModes);
+    await storage.set("videoPlatformModes", nextModes);
+  };
+
   const loadPlatforms = async () => {
-    const platforms = await storage.get<string[]>("videoPlatforms");
-    setSelectedPlatforms((platforms as string[]) || []);
+    const [savedPlatforms, savedModes] = await Promise.all([
+      storage.get<string[]>("videoPlatforms"),
+      storage.get<Record<string, PublishMode>>("videoPlatformModes"),
+    ]);
+    setSelectedPlatforms((savedPlatforms as string[]) || []);
+    setPlatformModes(savedModes || {});
   };
   loadPlatforms();
 
@@ -115,6 +132,7 @@ const VideoTab: React.FC<VideoTabProps> = ({ funcPublish }) => {
         name: platform,
         injectUrl: platforms.find((p) => p.name === platform)?.injectUrl || "",
         extraConfig: platforms.find((p) => p.name === platform)?.extraConfig || {},
+        publishMode: isForcedFillPlatform(platform) ? "fill" : (platformModes[platform] || "fill"),
       })),
       data: {
         title,
@@ -251,7 +269,9 @@ const VideoTab: React.FC<VideoTabProps> = ({ funcPublish }) => {
           <div className="flex flex-col gap-4 p-4 rounded-lg bg-default-50">
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2" />
+                <div className="text-xs text-default-500">
+                  默认仅填充；可逐平台开启自动发布。小红书固定仅填充。
+                </div>
                 {selectedPlatforms.length > 0 && (
                   <Button
                     isIconOnly
@@ -293,6 +313,8 @@ const VideoTab: React.FC<VideoTabProps> = ({ funcPublish }) => {
                           onChange={(_, isSelected) => handlePlatformChange(platform.name, isSelected)}
                           isDisabled={false}
                           syncData={getSyncData()}
+                          publishMode={isForcedFillPlatform(platform.name) ? "fill" : (platformModes[platform.name] || "fill")}
+                          onPublishModeChange={(mode) => handlePublishModeChange(platform.name, mode)}
                         />
                       ))}
                   </div>
@@ -323,6 +345,8 @@ const VideoTab: React.FC<VideoTabProps> = ({ funcPublish }) => {
                           onChange={(_, isSelected) => handlePlatformChange(platform.name, isSelected)}
                           isDisabled={false}
                           syncData={getSyncData()}
+                          publishMode={isForcedFillPlatform(platform.name) ? "fill" : (platformModes[platform.name] || "fill")}
+                          onPublishModeChange={(mode) => handlePublishModeChange(platform.name, mode)}
                         />
                       ))}
                   </div>

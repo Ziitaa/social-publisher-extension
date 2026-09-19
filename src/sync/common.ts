@@ -5,9 +5,12 @@ import { getExtraConfigFromPlatformInfo, getExtraConfigFromPlatformInfos } from 
 import { PodcastInfoMap } from "./podcast";
 import { VideoInfoMap } from "./video";
 
+export type PublishMode = "fill" | "auto";
+
 export interface SyncDataPlatform {
   name: string;
   injectUrl?: string;
+  publishMode?: PublishMode;
   extraConfig?:
     | {
         customInjectUrls?: string[]; // Beta 功能，用于自定义注入 URL
@@ -110,6 +113,24 @@ export const infoMap: Record<string, PlatformInfo> = {
   ...PodcastInfoMap,
 };
 
+export function isForcedFillPlatform(platformName: string): boolean {
+  return platformName.includes("REDNOTE");
+}
+
+export function getPlatformPublishMode(platform: SyncDataPlatform): PublishMode {
+  if (isForcedFillPlatform(platform.name)) return "fill";
+  return platform.publishMode === "auto" ? "auto" : "fill";
+}
+
+export function getPlatformSyncData(data: SyncData, platform: SyncDataPlatform): SyncData {
+  const publishMode = getPlatformPublishMode(platform);
+  return {
+    ...data,
+    platforms: [{ ...platform, publishMode }],
+    isAutoPublish: publishMode === "auto",
+  };
+}
+
 export async function getPlatformInfo(platform: string): Promise<PlatformInfo | null> {
   const platformInfo = infoMap[platform];
   if (platformInfo) {
@@ -178,7 +199,7 @@ export async function createTabsForPlatforms(data: SyncData) {
             groupId = await chrome.tabs.group({ tabIds: [tab.id!] });
             await chrome.tabGroups.update(groupId, {
               color: "blue",
-              title: `MultiPost-${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`,
+              title: `Social Publisher-${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`,
             });
           } else {
             // 将新标签页添加到现有组中
@@ -218,7 +239,7 @@ export async function injectScriptsToTabs(
               chrome.scripting.executeScript({
                 target: { tabId: tab.id },
                 func: info.injectFunction,
-                args: [data],
+                args: [getPlatformSyncData(data, platform)],
               });
             }
           });

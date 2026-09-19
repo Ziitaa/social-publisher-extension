@@ -8,7 +8,6 @@ import {
   getPlatformInfos,
 } from "~sync/common";
 import QuantumEntanglementKeepAlive from "../utils/keep-alive";
-import { linkExtensionMessageHandler, starter } from "./services/api";
 import {
   addTabsManagerMessages,
   tabsManagerHandleTabRemoved,
@@ -21,33 +20,32 @@ const storage = new Storage({
   area: "local",
 });
 
-async function initDefaultTrustedDomains() {
-  const trustedDomains = await storage.get<Array<{ id: string; domain: string }>>("trustedDomains");
-  if (!trustedDomains) {
-    await storage.set("trustedDomains", [
-      {
-        id: crypto.randomUUID(),
-        domain: "multipost.app",
-      },
-    ]);
-  }
+async function initLocalSecurityState() {
+  const trustedDomains = (await storage.get<Array<{ id: string; domain: string }>>("trustedDomains")) || [];
+  const localDomains = trustedDomains.filter(({ domain }) => domain !== "multipost.app" && !domain.endsWith(".multipost.app"));
+  await storage.set("trustedDomains", localDomains);
+
+  // Legacy SaaS credentials are not used by the standalone fork.
+  await storage.remove("apiKey");
+  await storage.remove("extensionClientId");
 }
 
 chrome.runtime.onInstalled.addListener((object) => {
   if (object.reason === chrome.runtime.OnInstalledReason.INSTALL) {
-    chrome.tabs.create({ url: "https://multipost.app/on-install" });
+    chrome.runtime.openOptionsPage();
   }
-  initDefaultTrustedDomains();
+  initLocalSecurityState();
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 });
+
+initLocalSecurityState();
 
 // Listen Message || 监听消息 || START
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const handled =
     defaultMessageHandler(request, sender, sendResponse) ||
     tabsManagerMessageHandler(request, sender, sendResponse) ||
-    trustDomainMessageHandler(request, sender, sendResponse) ||
-    linkExtensionMessageHandler(request, sender, sendResponse);
+    trustDomainMessageHandler(request, sender, sendResponse);
   return handled;
 });
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -166,7 +164,6 @@ const defaultMessageHandler = (request, _sender, sendResponse) => {
   }
   return false;
 };
-starter(1000 * 30);
 // Message Handler || 消息处理器 || END
 
 // Keep Alive || 保活机制 || START
