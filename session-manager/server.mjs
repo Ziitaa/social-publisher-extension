@@ -340,7 +340,7 @@ const server = http.createServer(async (req, res) => {
       const payloadByAccount = body.payloadByAccount || {};
       const state = await loadState();
       const now = Date.now();
-      const tasks = accountIds.map((accountId) => {
+      const tasks = accountIds.map((accountId, index) => {
         const account = state.accounts.find((item) => item.id === accountId);
         if (!account) throw new Error(`Unknown account: ${accountId}`);
         const payload = payloadByAccount[accountId];
@@ -373,12 +373,16 @@ const server = http.createServer(async (req, res) => {
       const campaignType = ["recruitment", "product", "b2b", "custom"].includes(body.campaignType)
         ? body.campaignType
         : "custom";
+      const sharedVariants = Array.isArray(body.sharedVariants) && body.sharedVariants.length
+        ? body.sharedVariants.slice(0, 10)
+        : [{ title: body.sharedData?.title || "", content: body.sharedData?.content || "" }];
       state.batches[batchId] = {
         id: batchId,
         contentType,
         campaignName,
         campaignType,
         sharedData: body.sharedData || {},
+        sharedVariants,
         createdAt: now,
       };
 
@@ -396,6 +400,7 @@ const server = http.createServer(async (req, res) => {
           contentType,
           campaignName,
           campaignType,
+          variantIndex: index % sharedVariants.length,
           status: "queued",
           createdAt: now,
           updatedAt: now,
@@ -437,13 +442,18 @@ const server = http.createServer(async (req, res) => {
       if (task.batchId) {
         const batch = state.batches[task.batchId];
         if (!batch) throw new Error("Task batch not found");
+        const variant = batch.sharedVariants?.[task.variantIndex || 0] || {};
         responseTask = {
           ...task,
           payload: {
             contentType: task.contentType || batch.contentType,
             syncData: {
               platforms: [task.platformInfo],
-              data: batch.sharedData,
+              data: {
+                ...batch.sharedData,
+                title: variant.title ?? batch.sharedData?.title ?? "",
+                content: variant.content ?? batch.sharedData?.content ?? "",
+              },
               isAutoPublish: false,
             },
           },
