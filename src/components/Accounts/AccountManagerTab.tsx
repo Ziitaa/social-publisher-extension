@@ -150,7 +150,7 @@ const AccountManagerTab: React.FC = () => {
   };
 
   const statusChip = (status?: string) => {
-    if (status === "ready") return <Chip size="sm" color="success" variant="flat">已绑定</Chip>;
+    if (status === "ready") return <Chip size="sm" color="success" variant="flat">会话已连接</Chip>;
     if (status === "starting") return <Chip size="sm" color="warning" variant="flat">启动中</Chip>;
     return <Chip size="sm" variant="flat">未绑定</Chip>;
   };
@@ -163,7 +163,7 @@ const AccountManagerTab: React.FC = () => {
             <div>
               <h3 className="text-lg font-semibold">账号池</h3>
               <p className="text-sm text-default-500">
-                每个账号绑定一个独立 Chrome 会话。不同账号不会共用登录 Cookie。
+                每个账号使用一个独立浏览器会话。不同账号不会共用登录 Cookie；“会话已连接”不等于平台账号已经登录。
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -267,13 +267,13 @@ const AccountManagerTab: React.FC = () => {
                           setMessage(`正在启动 ${account.label} 的独立 Chrome 会话…`);
                           try {
                             await launchSessionAccount(account.id);
-                            setMessage("新 Chrome 窗口已启动。请在那个窗口里登录这个账号。");
+                            setMessage("账号专用浏览器窗口已启动。第一次使用请在该窗口登录对应平台账号；以后会保留这个账号的登录状态。");
                             await reload();
                           } catch (error) {
                             setMessage(String(error instanceof Error ? error.message : error));
                           }
                         }}>
-                        {account.sessionStatus === "ready" ? "打开会话" : "启动/登录"}
+                        {account.sessionStatus === "ready" ? "打开账号窗口" : "启动账号窗口"}
                       </Button>
 
                       <Button
