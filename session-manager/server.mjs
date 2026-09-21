@@ -168,6 +168,7 @@ function normalizeAccount(input, existing) {
     label: String(input.label || existing?.label || "").trim(),
     username: String(input.username || existing?.username || "").trim(),
     status: String(input.status || existing?.status || "unknown"),
+    homeUrl: String(input.homeUrl || existing?.homeUrl || ""),
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };
