@@ -71,6 +71,16 @@ async function sendMatrixReceipt(taskId: string, body: Record<string, unknown>) 
   });
 }
 
+async function heartbeatMatrixSession() {
+  const accountId = await storage.get<string>("matrixSessionAccountId");
+  if (!accountId) return;
+  await fetch(`${SESSION_MANAGER_BASE_URL}/api/sessions/${encodeURIComponent(accountId)}/ready`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  }).catch(() => undefined);
+}
+
 async function pollMatrixTaskQueue() {
   if (matrixTaskBusy) return;
   const accountId = await storage.get<string>("matrixSessionAccountId");
@@ -220,6 +230,8 @@ const defaultMessageHandler = (request, _sender, sendResponse) => {
 // Message Handler || 消息处理器 || END
 
 setInterval(pollMatrixTaskQueue, 5000);
+setInterval(heartbeatMatrixSession, 10000);
+heartbeatMatrixSession();
 pollMatrixTaskQueue();
 
 // Keep Alive || 保活机制 || START
