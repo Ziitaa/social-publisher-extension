@@ -1,4 +1,4 @@
-import { Button, Card, CardBody, Chip, Input, Select, SelectItem, Textarea } from "@heroui/react";
+import { Button, Card, CardBody, Checkbox, Chip, Input, Select, SelectItem, Textarea } from "@heroui/react";
 import { Play, Plus, RefreshCw, Trash2, UsersRound } from "lucide-react";
 import { Icon } from "@iconify/react";
 import type React from "react";
@@ -6,10 +6,14 @@ import { listManagedAccounts, saveManagedAccounts } from "~accounts/pool";
 import { useEffect, useMemo, useState } from "react";
 import { getPlatformInfos } from "~sync/common";
 import {
+  deleteAccountGroup,
   deleteSessionAccount,
   getSessionManagerHealth,
   launchSessionAccount,
+  listAccountGroups,
   listSessionAccounts,
+  saveAccountGroup,
+  type AccountGroup,
   type SessionManagerAccount,
   upsertSessionAccount,
 } from "~session-manager-client";
@@ -27,10 +31,15 @@ type PlatformOption = {
 
 const AccountManagerTab: React.FC = () => {
   const [accounts, setAccounts] = useState<SessionManagerAccount[]>([]);
+  const [groups, setGroups] = useState<AccountGroup[]>([]);
   const [platform, setPlatform] = useState("douyin");
   const [platformOptions, setPlatformOptions] = useState<PlatformOption[]>([]);
   const [label, setLabel] = useState("");
   const [username, setUsername] = useState("");
+  const [purpose, setPurpose] = useState<"recruitment" | "product" | "b2b" | "general">("recruitment");
+  const [owner, setOwner] = useState("");
+  const [groupName, setGroupName] = useState("");
+  const [groupAccountIds, setGroupAccountIds] = useState<string[]>([]);
   const [online, setOnline] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -41,6 +50,7 @@ const AccountManagerTab: React.FC = () => {
       await getSessionManagerHealth();
       setOnline(true);
       let remoteAccounts = await listSessionAccounts();
+      const remoteGroups = await listAccountGroups();
       if (remoteAccounts.length === 0) {
         const legacyAccounts = await listManagedAccounts();
         if (legacyAccounts.length > 0) {
@@ -59,6 +69,7 @@ const AccountManagerTab: React.FC = () => {
         }
       }
       setAccounts(remoteAccounts);
+      setGroups(remoteGroups);
     } catch {
       setOnline(false);
       setAccounts([]);
@@ -115,11 +126,14 @@ const AccountManagerTab: React.FC = () => {
         platformLabel,
         label: trimmed,
         username: username.trim(),
+        purpose,
+        owner: owner.trim(),
         status: "unknown",
         homeUrl: platformOptions.find((item) => item.key === platform)?.homeUrl,
       });
       setLabel("");
       setUsername("");
+      setOwner("");
       setMessage("账号已加入账号池。下一步点“启动/登录”绑定独立会话。");
       await reload();
     } finally {
