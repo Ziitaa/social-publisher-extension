@@ -59,17 +59,23 @@ The Session Manager will:
 - Account pool UI.
 - Multiple accounts can be recorded under one platform.
 
-### Stage B — next
+### Stage B — implemented
 - Local Session Manager HTTP contract.
-- Bind each account to an isolated Chrome user-data directory.
-- Login-status checks.
-- Launch account session from the UI.
+- Each managed account binds to an isolated Chrome user-data directory.
+- Dedicated Chrome for Testing session browser can load the unpacked extension automatically.
+- Session heartbeat and online/offline status.
+- Launch/login account session from the account-pool UI.
+- Existing local account-pool records migrate into Session Manager on first connection.
 
-### Stage C
-- Publish queue.
+### Stage C — implemented v0
+- Batch publish queue.
 - Select many accounts across one or more platforms.
-- Sequential/controlled dispatch.
-- Per-account receipts and retry state.
+- Queue tasks are claimed by the matching isolated account session.
+- Shared media is deduplicated per batch instead of copied once per account.
+- Two-minute task leases prevent one crashed session from permanently consuming a queued task.
+- Per-account dispatch/failure receipts.
+- Dynamic/image and video batch payloads.
+- Xiaohongshu remains forced fill-only.
 
 ### Stage D
 - Local drafts/history.
