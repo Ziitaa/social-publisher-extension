@@ -13,7 +13,7 @@ import { Play, RefreshCw, Send, Upload, UsersRound } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  enqueueMatrixTasks,
+  enqueueMatrixBatch,
   launchSessionAccount,
   listMatrixTasks,
   listSessionAccounts,
@@ -132,7 +132,7 @@ const MatrixQueueTab: React.FC = () => {
     setBusy(true);
     try {
       const platformInfos = await getPlatformInfos(contentType);
-      const payloadByAccount: Record<string, { contentType: ContentType; syncData: SyncData }> = {};
+      const platformByAccount: Record<string, unknown> = {};
       const unsupported: string[] = [];
 
       for (const id of selected) {
@@ -146,40 +146,40 @@ const MatrixQueueTab: React.FC = () => {
         }
 
         const effectiveMode: PublishMode = isForcedFillPlatform(platform.name) ? "fill" : publishMode;
-        const syncData: SyncData = {
-          platforms: [
-            {
-              name: platform.name,
-              injectUrl: platform.injectUrl,
-              extraConfig: platform.extraConfig || {},
-              publishMode: effectiveMode,
-            },
-          ],
-          data:
-            contentType === "VIDEO"
-              ? {
-                  title,
-                  content,
-                  video: video!,
-                }
-              : {
-                  title,
-                  content,
-                  images,
-                  videos: [],
-                },
-          isAutoPublish: false,
+        platformByAccount[id] = {
+          name: platform.name,
+          injectUrl: platform.injectUrl,
+          extraConfig: platform.extraConfig || {},
+          publishMode: effectiveMode,
         };
-        payloadByAccount[id] = { contentType, syncData };
       }
 
-      const accountIds = selected.filter((id) => payloadByAccount[id]);
+      const accountIds = selected.filter((id) => platformByAccount[id]);
       if (!accountIds.length) {
         setMessage("所选账号没有匹配当前内容类型的平台适配器。");
         return;
       }
 
-      await enqueueMatrixTasks(accountIds, payloadByAccount);
+      const sharedData =
+        contentType === "VIDEO"
+          ? {
+              title,
+              content,
+              video: video!,
+            }
+          : {
+              title,
+              content,
+              images,
+              videos: [],
+            };
+
+      await enqueueMatrixBatch({
+        accountIds,
+        contentType,
+        sharedData,
+        platformByAccount,
+      });
       setMessage(
         `已加入 ${accountIds.length} 个账号任务。${unsupported.length ? ` 未支持：${unsupported.join("、")}` : ""}`,
       );
@@ -345,7 +345,7 @@ const MatrixQueueTab: React.FC = () => {
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{account?.label || task.accountId.slice(0, 8)}</div>
                     <div className="text-xs text-default-500">
-                      {task.payload?.contentType} · {new Date(task.createdAt).toLocaleString()}
+                      {task.contentType || task.payload?.contentType} · {new Date(task.createdAt).toLocaleString()}
                     </div>
                   </div>
                   <Chip size="sm" variant="flat" color={statusColor(task.status)}>
