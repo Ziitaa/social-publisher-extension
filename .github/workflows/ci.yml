@@ -27,3 +27,14 @@ jobs:
         run: node --check session-manager/server.mjs
       - name: Build extension
         run: pnpm build
+
+  windows-launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile desktop launcher
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Add-Type -Path ".\desktop\SocialPublisherLauncher.cs" -ReferencedAssemblies @("System.Net.Http.dll") -OutputAssembly ".\dist\SocialPublisher.exe" -OutputType WindowsApplication
+          if (-not (Test-Path ".\dist\SocialPublisher.exe")) { throw "Launcher build failed" }
