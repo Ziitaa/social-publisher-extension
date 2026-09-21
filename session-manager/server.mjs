@@ -113,9 +113,6 @@ function findChrome() {
   const candidates = [
     process.env.SOCIAL_PUBLISHER_CHROME,
     process.env.CHROME_PATH,
-    path.join(process.env.PROGRAMFILES || "", "Google", "Chrome", "Application", "chrome.exe"),
-    path.join(process.env["PROGRAMFILES(X86)"] || "", "Google", "Chrome", "Application", "chrome.exe"),
-    path.join(process.env.LOCALAPPDATA || "", "Google", "Chrome", "Application", "chrome.exe"),
   ].filter(Boolean);
   return candidates.find((candidate) => existsSync(candidate));
 }
