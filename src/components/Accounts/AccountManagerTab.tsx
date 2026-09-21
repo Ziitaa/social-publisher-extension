@@ -1,8 +1,10 @@
 import { Button, Card, CardBody, Chip, Input, Select, SelectItem, Textarea } from "@heroui/react";
 import { Play, Plus, RefreshCw, Trash2, UsersRound } from "lucide-react";
+import { Icon } from "@iconify/react";
 import type React from "react";
 import { listManagedAccounts, saveManagedAccounts } from "~accounts/pool";
 import { useEffect, useMemo, useState } from "react";
+import { getPlatformInfos, type PlatformInfo } from "~sync/common";
 import {
   deleteSessionAccount,
   getSessionManagerHealth,
@@ -12,21 +14,20 @@ import {
   upsertSessionAccount,
 } from "~session-manager-client";
 
-const PLATFORM_OPTIONS = [
-  { key: "douyin", label: "抖音" },
-  { key: "rednote", label: "小红书" },
-  { key: "bilibili", label: "哔哩哔哩" },
-  { key: "weibo", label: "微博" },
-  { key: "zhihu", label: "知乎" },
-  { key: "tiktok", label: "TikTok" },
-  { key: "x", label: "X" },
-  { key: "youtube", label: "YouTube" },
-  { key: "other", label: "其他" },
-] as const;
+type PlatformOption = {
+  key: string;
+  label: string;
+  iconifyIcon?: string;
+  faviconUrl?: string;
+  tags: string[];
+};
+
+
 
 const AccountManagerTab: React.FC = () => {
   const [accounts, setAccounts] = useState<SessionManagerAccount[]>([]);
   const [platform, setPlatform] = useState("douyin");
+  const [platformOptions, setPlatformOptions] = useState<PlatformOption[]>([]);
   const [label, setLabel] = useState("");
   const [username, setUsername] = useState("");
   const [online, setOnline] = useState(false);
@@ -64,6 +65,27 @@ const AccountManagerTab: React.FC = () => {
   };
 
   useEffect(() => {
+    getPlatformInfos()
+      .then((infos) => {
+        const map = new Map<string, PlatformOption>();
+        for (const info of infos) {
+          const current = map.get(info.accountKey);
+          map.set(info.accountKey, {
+            key: info.accountKey,
+            label: info.platformName || info.accountKey,
+            iconifyIcon: current?.iconifyIcon || info.iconifyIcon,
+            faviconUrl: current?.faviconUrl || info.faviconUrl,
+            tags: Array.from(new Set([...(current?.tags || []), ...(info.tags || [])])),
+          });
+        }
+        const options = Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
+        setPlatformOptions(options);
+        if (options.length && !options.some((item) => item.key === platform)) {
+          setPlatform(options[0].key);
+        }
+      })
+      .catch(console.error);
+
     reload();
     const timer = window.setInterval(reload, 5000);
     return () => window.clearInterval(timer);
@@ -82,7 +104,7 @@ const AccountManagerTab: React.FC = () => {
   const handleAdd = async () => {
     const trimmed = label.trim();
     if (!trimmed || !online) return;
-    const platformLabel = PLATFORM_OPTIONS.find((item) => item.key === platform)?.label || platform;
+    const platformLabel = platformOptions.find((item) => item.key === platform)?.label || platform;
     setBusy(true);
     try {
       await upsertSessionAccount({
@@ -111,7 +133,7 @@ const AccountManagerTab: React.FC = () => {
     if (!lines.length) return;
 
     const keyByLabel = new Map<string, string>();
-    for (const item of PLATFORM_OPTIONS) {
+    for (const item of platformOptions) {
       keyByLabel.set(item.key.toLowerCase(), item.key);
       keyByLabel.set(item.label.toLowerCase(), item.key);
     }
@@ -130,7 +152,7 @@ const AccountManagerTab: React.FC = () => {
           skipped.push(line);
           continue;
         }
-        const platformLabel = PLATFORM_OPTIONS.find((item) => item.key === platformKey)?.label || platformKey;
+        const platformLabel = platformOptions.find((item) => item.key === platformKey)?.label || platformKey;
         await upsertSessionAccount({
           id: crypto.randomUUID(),
           platform: platformKey,
@@ -191,8 +213,18 @@ const AccountManagerTab: React.FC = () => {
                 const next = Array.from(keys)[0];
                 if (next) setPlatform(String(next));
               }}>
-              {PLATFORM_OPTIONS.map((item) => (
-                <SelectItem key={item.key}>{item.label}</SelectItem>
+              {platformOptions.map((item) => (
+                <SelectItem
+                  key={item.key}
+                  startContent={
+                    item.iconifyIcon ? (
+                      <Icon icon={item.iconifyIcon} className="size-4" />
+                    ) : item.faviconUrl ? (
+                      <img src={item.faviconUrl} alt="" className="size-4 rounded-sm" />
+                    ) : undefined
+                  }>
+                  {item.label}
+                </SelectItem>
               ))}
             </Select>
             <Input label="账号备注名" placeholder="例如：抖音001" value={label} onValueChange={setLabel} />
@@ -211,7 +243,7 @@ const AccountManagerTab: React.FC = () => {
           <div className="mt-2 border-t border-divider pt-4">
             <div className="mb-2 text-sm font-medium">批量导入账号</div>
             <div className="mb-2 text-xs text-default-500">
-              每行：平台,账号备注名,平台用户名（用户名可留空）。例如：抖音,抖音001,@user01
+              支持全部已适配平台。每行：平台,账号备注名,平台用户名（用户名可留空）。例如：抖音,抖音001,@user01
             </div>
             <Textarea
               value={bulkText}
