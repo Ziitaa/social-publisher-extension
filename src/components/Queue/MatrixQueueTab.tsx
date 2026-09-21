@@ -179,7 +179,7 @@ const MatrixQueueTab: React.FC = () => {
       for (const id of selected) {
         await launchSessionAccount(id);
       }
-      setMessage("已启动所选账号会话。第一次使用时请分别在弹出的 Chrome 窗口中完成登录。");
+      setMessage("已打开所选账号。第一次使用时请分别完成平台登录。");
       await reload();
     } catch (error) {
       setMessage(String(error instanceof Error ? error.message : error));
@@ -417,7 +417,7 @@ const MatrixQueueTab: React.FC = () => {
               startContent={<Play className="size-4" />}
               isDisabled={!selected.length || busy}
               onPress={launchSelected}>
-              启动所选会话
+              打开所选账号
             </Button>
             <Button
               color="primary"
@@ -515,7 +515,7 @@ const MatrixQueueTab: React.FC = () => {
                                   size="sm"
                                   variant="flat"
                                   color={account.sessionStatus === "ready" ? "success" : "default"}>
-                                  {account.sessionStatus === "ready" ? "会话就绪" : "未启动"}
+                                  {account.sessionStatus === "ready" ? "可使用" : "需登录"}
                                 </Chip>
                               </label>
                             ))}
