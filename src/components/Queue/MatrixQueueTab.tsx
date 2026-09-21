@@ -54,6 +54,8 @@ const MatrixQueueTab: React.FC = () => {
   const [publishMode, setPublishMode] = useState<PublishMode>("fill");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [variantB, setVariantB] = useState("");
+  const [variantC, setVariantC] = useState("");
   const [images, setImages] = useState<FileData[]>([]);
   const [video, setVideo] = useState<FileData | null>(null);
   const [message, setMessage] = useState("");
@@ -245,12 +247,19 @@ const MatrixQueueTab: React.FC = () => {
               videos: [],
             };
 
+      const sharedVariants = [
+        { title, content },
+        ...(variantB.trim() ? [{ title, content: variantB.trim() }] : []),
+        ...(variantC.trim() ? [{ title, content: variantC.trim() }] : []),
+      ];
+
       await enqueueMatrixBatch({
         accountIds,
         contentType,
         campaignName: campaignName.trim() || undefined,
         campaignType,
         sharedData,
+        sharedVariants,
         platformByAccount,
       });
       setMessage(
@@ -277,7 +286,7 @@ const MatrixQueueTab: React.FC = () => {
           <div>
             <h3 className="text-lg font-semibold">推广工作台</h3>
             <p className="text-sm text-default-500">
-              从推广目标出发创建任务，选择账号组或具体账号，再分发到各平台。
+              从推广目标出发创建任务，选择账号组或具体账号；可设置多版文案，系统会在账号间轮换分配。
             </p>
           </div>
 
@@ -351,7 +360,27 @@ const MatrixQueueTab: React.FC = () => {
           </div>
 
           <Input label="标题" value={title} onValueChange={setTitle} />
-          <Textarea label="正文" value={content} onValueChange={setContent} minRows={5} />
+          <Textarea label="主文案 A" value={content} onValueChange={setContent} minRows={5} />
+
+          <details className="rounded-xl border border-divider bg-content1 p-3">
+            <summary className="cursor-pointer text-sm font-medium">内容变体（可选，用于矩阵轮换）</summary>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              <Textarea
+                label="文案 B"
+                placeholder="留空则全部使用 A；填写后账号会在 A / B 之间轮换。"
+                value={variantB}
+                onValueChange={setVariantB}
+                minRows={4}
+              />
+              <Textarea
+                label="文案 C"
+                placeholder="可继续增加第三版文案，账号会按 A / B / C 轮换。"
+                value={variantC}
+                onValueChange={setVariantC}
+                minRows={4}
+              />
+            </div>
+          </details>
 
           {contentType === "DYNAMIC" ? (
             <div>
