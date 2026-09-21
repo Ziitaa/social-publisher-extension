@@ -4,7 +4,7 @@ import { Icon } from "@iconify/react";
 import type React from "react";
 import { listManagedAccounts, saveManagedAccounts } from "~accounts/pool";
 import { useEffect, useMemo, useState } from "react";
-import { getPlatformInfos, type PlatformInfo } from "~sync/common";
+import { getPlatformInfos } from "~sync/common";
 import {
   deleteSessionAccount,
   getSessionManagerHealth,
@@ -20,6 +20,7 @@ type PlatformOption = {
   iconifyIcon?: string;
   faviconUrl?: string;
   tags: string[];
+  homeUrl?: string;
 };
 
 
@@ -76,6 +77,7 @@ const AccountManagerTab: React.FC = () => {
             iconifyIcon: current?.iconifyIcon || info.iconifyIcon,
             faviconUrl: current?.faviconUrl || info.faviconUrl,
             tags: Array.from(new Set([...(current?.tags || []), ...(info.tags || [])])),
+            homeUrl: current?.homeUrl || info.homeUrl,
           });
         }
         const options = Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
@@ -114,6 +116,7 @@ const AccountManagerTab: React.FC = () => {
         label: trimmed,
         username: username.trim(),
         status: "unknown",
+        homeUrl: platformOptions.find((item) => item.key === platform)?.homeUrl,
       });
       setLabel("");
       setUsername("");
@@ -160,6 +163,7 @@ const AccountManagerTab: React.FC = () => {
           label: accountLabel,
           username: accountUsername,
           status: "unknown",
+          homeUrl: platformOptions.find((item) => item.key === platformKey)?.homeUrl,
         });
         imported += 1;
       }
@@ -200,8 +204,7 @@ const AccountManagerTab: React.FC = () => {
 
           {!online && (
             <div className="rounded-xl border border-warning-200 bg-warning-50 p-3 text-sm">
-              先在 PowerShell 启动本地 Session Manager：
-              <code className="ml-2">powershell -ExecutionPolicy Bypass -File .\start-session-manager.ps1</code>
+              本地发布服务未连接。正式安装版会随 Windows 自动启动，不需要同事手动打开 PowerShell。
             </div>
           )}
 
