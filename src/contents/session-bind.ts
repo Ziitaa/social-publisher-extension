@@ -29,6 +29,25 @@ async function bindSession() {
       "position:fixed;left:24px;right:24px;bottom:24px;z-index:2147483647;padding:14px 16px;border-radius:12px;background:#111;color:#fff;font:14px system-ui;box-shadow:0 8px 30px #0003";
     document.documentElement.appendChild(marker);
   }
+
+  const account = await fetch(`http://127.0.0.1:2663/api/accounts/${encodeURIComponent(accountId)}`)
+    .then((response) => (response.ok ? response.json() : null))
+    .catch(() => null);
+
+  const homeByPlatform: Record<string, string> = {
+    douyin: "https://creator.douyin.com/",
+    rednote: "https://creator.xiaohongshu.com/",
+    bilibili: "https://member.bilibili.com/",
+    weibo: "https://weibo.com/",
+    zhihu: "https://www.zhihu.com/",
+    tiktok: "https://www.tiktok.com/",
+    x: "https://x.com/",
+    youtube: "https://studio.youtube.com/",
+  };
+  const homeUrl = account?.platform ? homeByPlatform[account.platform] : null;
+  if (homeUrl) {
+    window.setTimeout(() => window.location.replace(homeUrl), 1200);
+  }
 }
 
 bindSession().catch(console.error);
