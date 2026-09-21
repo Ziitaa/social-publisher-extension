@@ -1,4 +1,4 @@
-import { Button, Card, CardBody, Chip, Input, Select, SelectItem } from "@heroui/react";
+import { Button, Card, CardBody, Chip, Input, Select, SelectItem, Textarea } from "@heroui/react";
 import { Play, Plus, RefreshCw, Trash2, UsersRound } from "lucide-react";
 import type React from "react";
 import { listManagedAccounts, saveManagedAccounts } from "~accounts/pool";
@@ -32,6 +32,7 @@ const AccountManagerTab: React.FC = () => {
   const [online, setOnline] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [bulkText, setBulkText] = useState("");
 
   const reload = async () => {
     try {
@@ -101,6 +102,53 @@ const AccountManagerTab: React.FC = () => {
     }
   };
 
+  const handleBulkImport = async () => {
+    if (!online) return;
+    const lines = bulkText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (!lines.length) return;
+
+    const keyByLabel = new Map<string, string>();
+    for (const item of PLATFORM_OPTIONS) {
+      keyByLabel.set(item.key.toLowerCase(), item.key);
+      keyByLabel.set(item.label.toLowerCase(), item.key);
+    }
+
+    setBusy(true);
+    let imported = 0;
+    const skipped: string[] = [];
+    try {
+      for (const line of lines) {
+        const parts = line.split(/[\t,，]/).map((part) => part.trim());
+        const rawPlatform = (parts[0] || "").toLowerCase();
+        const accountLabel = parts[1] || "";
+        const accountUsername = parts[2] || "";
+        const platformKey = keyByLabel.get(rawPlatform);
+        if (!platformKey || !accountLabel) {
+          skipped.push(line);
+          continue;
+        }
+        const platformLabel = PLATFORM_OPTIONS.find((item) => item.key === platformKey)?.label || platformKey;
+        await upsertSessionAccount({
+          id: crypto.randomUUID(),
+          platform: platformKey,
+          platformLabel,
+          label: accountLabel,
+          username: accountUsername,
+          status: "unknown",
+        });
+        imported += 1;
+      }
+      setBulkText("");
+      setMessage(`已批量导入 ${imported} 个账号。${skipped.length ? ` 跳过 ${skipped.length} 行格式错误数据。` : ""}`);
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const statusChip = (status?: string) => {
     if (status === "ready") return <Chip size="sm" color="success" variant="flat">已绑定</Chip>;
     if (status === "starting") return <Chip size="sm" color="warning" variant="flat">启动中</Chip>;
@@ -159,6 +207,22 @@ const AccountManagerTab: React.FC = () => {
             </Button>
           </div>
           {message && <div className="text-xs text-default-500">{message}</div>}
+
+          <div className="mt-2 border-t border-divider pt-4">
+            <div className="mb-2 text-sm font-medium">批量导入账号</div>
+            <div className="mb-2 text-xs text-default-500">
+              每行：平台,账号备注名,平台用户名（用户名可留空）。例如：抖音,抖音001,@user01
+            </div>
+            <Textarea
+              value={bulkText}
+              onValueChange={setBulkText}
+              minRows={4}
+              placeholder={"抖音,抖音001,@user01\n抖音,抖音002,@user02\n小红书,小红书001,昵称"}
+            />
+            <Button className="mt-2" variant="flat" isDisabled={!online || busy || !bulkText.trim()} onPress={handleBulkImport}>
+              批量导入
+            </Button>
+          </div>
         </CardBody>
       </Card>
 
