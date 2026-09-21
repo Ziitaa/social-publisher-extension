@@ -16,8 +16,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   enqueueMatrixBatch,
   launchSessionAccount,
+  listAccountGroups,
   listMatrixTasks,
   listSessionAccounts,
+  type AccountGroup,
   type MatrixTask,
   type SessionManagerAccount,
 } from "~session-manager-client";
@@ -44,8 +46,11 @@ const MatrixQueueTab: React.FC = () => {
   const [accounts, setAccounts] = useState<SessionManagerAccount[]>([]);
   const [tasks, setTasks] = useState<MatrixTask[]>([]);
   const [platforms, setPlatforms] = useState<PlatformInfo[]>([]);
+  const [groups, setGroups] = useState<AccountGroup[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [contentType, setContentType] = useState<ContentType>("DYNAMIC");
+  const [campaignType, setCampaignType] = useState<"recruitment" | "product" | "b2b" | "custom">("recruitment");
+  const [campaignName, setCampaignName] = useState("");
   const [publishMode, setPublishMode] = useState<PublishMode>("fill");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -58,10 +63,11 @@ const MatrixQueueTab: React.FC = () => {
 
   const reload = async () => {
     try {
-      const [nextAccounts, nextTasks, nextPlatforms] = await Promise.all([
+      const [nextAccounts, nextTasks, nextPlatforms, nextGroups] = await Promise.all([
         listSessionAccounts(),
         listMatrixTasks(),
         getPlatformInfos(contentType),
+        listAccountGroups(),
       ]);
       setAccounts(nextAccounts);
       setTasks(nextTasks);
@@ -70,6 +76,7 @@ const MatrixQueueTab: React.FC = () => {
         if (!unique.has(info.accountKey)) unique.set(info.accountKey, info);
       }
       setPlatforms(Array.from(unique.values()));
+      setGroups(nextGroups);
     } catch {
       setMessage("本地发布服务未连接。正式安装后会随 Windows 自动启动。");
     }
@@ -241,6 +248,8 @@ const MatrixQueueTab: React.FC = () => {
       await enqueueMatrixBatch({
         accountIds,
         contentType,
+        campaignName: campaignName.trim() || undefined,
+        campaignType,
         sharedData,
         platformByAccount,
       });
@@ -266,13 +275,31 @@ const MatrixQueueTab: React.FC = () => {
       <Card className="shadow-none bg-default-50">
         <CardBody className="gap-4">
           <div>
-            <h3 className="text-lg font-semibold">批量发布队列</h3>
+            <h3 className="text-lg font-semibold">推广工作台</h3>
             <p className="text-sm text-default-500">
-              选择多个账号后创建任务。每个账号由自己的独立 Chrome 会话领取任务，不共享登录状态。
+              从推广目标出发创建任务，选择账号组或具体账号，再分发到各平台。
             </p>
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
+            <Select
+              label="推广类型"
+              selectedKeys={[campaignType]}
+              onSelectionChange={(keys) => {
+                const next = Array.from(keys)[0];
+                if (next) setCampaignType(String(next) as typeof campaignType);
+              }}>
+              <SelectItem key="recruitment">招聘推广</SelectItem>
+              <SelectItem key="product">产品推广</SelectItem>
+              <SelectItem key="b2b">经销商 / B2B</SelectItem>
+              <SelectItem key="custom">自定义</SelectItem>
+            </Select>
+            <Input
+              label="推广任务名称"
+              placeholder="例如：销售主管招聘 09/21"
+              value={campaignName}
+              onValueChange={setCampaignName}
+            />
             <Select
               label="内容类型"
               selectedKeys={[contentType]}
@@ -283,6 +310,30 @@ const MatrixQueueTab: React.FC = () => {
               <SelectItem key="DYNAMIC">图文 / 动态</SelectItem>
               <SelectItem key="VIDEO">视频</SelectItem>
             </Select>
+          </div>
+
+          {groups.length > 0 && (
+            <div>
+              <div className="mb-2 text-sm font-medium">账号组</div>
+              <div className="flex flex-wrap gap-2">
+                {groups.map((group) => (
+                  <Button
+                    key={group.id}
+                    size="sm"
+                    variant="flat"
+                    onPress={() => {
+                      const ids = group.accountIds.filter((id) => accounts.some((account) => account.id === id));
+                      setSelected(ids);
+                      setMessage(`已选择账号组“${group.name}”，共 ${ids.length} 个账号。`);
+                    }}>
+                    {group.name} · {group.accountIds.length}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="grid gap-3 md:grid-cols-3">
             <Select
               label="发布模式"
               selectedKeys={[publishMode]}
@@ -294,7 +345,7 @@ const MatrixQueueTab: React.FC = () => {
               <SelectItem key="auto">自动发布（支持的平台）</SelectItem>
             </Select>
             <div className="flex items-end gap-2">
-              <Button variant="flat" onPress={selectAll}>全选账号</Button>
+              <Button variant="flat" onPress={selectAll}>全选可用账号</Button>
               <Button variant="light" onPress={clearSelection}>清空</Button>
             </div>
           </div>
@@ -344,7 +395,7 @@ const MatrixQueueTab: React.FC = () => {
               startContent={<Send className="size-4" />}
               isDisabled={!selected.length || busy}
               onPress={enqueue}>
-              加入发布队列（{selected.length}）
+              创建推广任务（{selected.length}）
             </Button>
             <Button isIconOnly variant="light" aria-label="刷新" onPress={reload}>
               <RefreshCw className="size-4" />
