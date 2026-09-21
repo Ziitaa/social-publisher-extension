@@ -59,6 +59,59 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Message Handler || 消息处理器 || START
 let currentSyncData: SyncData | null = null;
 let currentPublishPopup: chrome.windows.Window | null = null;
+
+const SESSION_MANAGER_BASE_URL = "http://127.0.0.1:2663";
+let matrixTaskBusy = false;
+
+async function sendMatrixReceipt(taskId: string, body: Record<string, unknown>) {
+  await fetch(`${SESSION_MANAGER_BASE_URL}/api/tasks/${encodeURIComponent(taskId)}/receipt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function pollMatrixTaskQueue() {
+  if (matrixTaskBusy) return;
+  const accountId = await storage.get<string>("matrixSessionAccountId");
+  if (!accountId) return;
+
+  matrixTaskBusy = true;
+  try {
+    const response = await fetch(
+      `${SESSION_MANAGER_BASE_URL}/api/tasks/next?accountId=${encodeURIComponent(accountId)}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) return;
+    const body = await response.json();
+    const task = body?.task;
+    if (!task) return;
+
+    try {
+      const syncData = task.payload?.syncData as SyncData;
+      if (!syncData?.platforms?.length) {
+        throw new Error("Task payload missing syncData/platforms");
+      }
+      const tabs = await createTabsForPlatforms(syncData);
+      await sendMatrixReceipt(task.id, {
+        status: "dispatched",
+        accountId,
+        tabs: tabs.map((item) => ({ id: item.tab.id, url: item.tab.url })),
+      });
+    } catch (error) {
+      await sendMatrixReceipt(task.id, {
+        status: "failed",
+        accountId,
+        error: String(error instanceof Error ? error.message : error),
+      });
+    }
+  } catch {
+    // Session Manager may be offline; retry on the next interval.
+  } finally {
+    matrixTaskBusy = false;
+  }
+}
+
 const defaultMessageHandler = (request, _sender, sendResponse) => {
   if (request.action === "MULTIPOST_EXTENSION_CHECK_SERVICE_STATUS") {
     sendResponse({ extensionId: chrome.runtime.id });
@@ -165,6 +218,9 @@ const defaultMessageHandler = (request, _sender, sendResponse) => {
   return false;
 };
 // Message Handler || 消息处理器 || END
+
+setInterval(pollMatrixTaskQueue, 5000);
+pollMatrixTaskQueue();
 
 // Keep Alive || 保活机制 || START
 const quantumKeepAlive = new QuantumEntanglementKeepAlive();
