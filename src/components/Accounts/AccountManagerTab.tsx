@@ -134,7 +134,7 @@ const AccountManagerTab: React.FC = () => {
       setLabel("");
       setUsername("");
       setOwner("");
-      setMessage("账号已加入账号池。下一步点“启动/登录”绑定独立会话。");
+      setMessage("账号已加入账号矩阵。下一步打开账号并完成首次登录。");
       await reload();
     } finally {
       setBusy(false);
@@ -190,9 +190,9 @@ const AccountManagerTab: React.FC = () => {
   };
 
   const statusChip = (status?: string) => {
-    if (status === "ready") return <Chip size="sm" color="success" variant="flat">会话已连接</Chip>;
-    if (status === "starting") return <Chip size="sm" color="warning" variant="flat">启动中</Chip>;
-    return <Chip size="sm" variant="flat">未绑定</Chip>;
+    if (status === "ready") return <Chip size="sm" color="success" variant="flat">可使用</Chip>;
+    if (status === "starting") return <Chip size="sm" color="warning" variant="flat">打开中</Chip>;
+    return <Chip size="sm" variant="flat">需登录</Chip>;
   };
 
   return (
@@ -201,14 +201,14 @@ const AccountManagerTab: React.FC = () => {
         <CardBody className="gap-3">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-lg font-semibold">账号池</h3>
+              <h3 className="text-lg font-semibold">账号矩阵</h3>
               <p className="text-sm text-default-500">
-                每个账号使用一个独立浏览器会话。不同账号不会共用登录 Cookie；“会话已连接”不等于平台账号已经登录。
+                集中管理各平台账号、用途、负责人和账号组。首次使用某个账号时完成一次登录，之后会保留登录状态。
               </p>
             </div>
             <div className="flex items-center gap-2">
               <Chip color={online ? "success" : "danger"} variant="flat" size="sm">
-                Session Manager {online ? "在线" : "未启动"}
+                {online ? "服务正常" : "服务未连接"}
               </Chip>
               <Button isIconOnly size="sm" variant="light" onPress={reload} aria-label="刷新">
                 <RefreshCw className="size-4" />
@@ -218,7 +218,7 @@ const AccountManagerTab: React.FC = () => {
 
           {!online && (
             <div className="rounded-xl border border-warning-200 bg-warning-50 p-3 text-sm">
-              本地发布服务未连接。正式安装版会随 Windows 自动启动，不需要同事手动打开 PowerShell。
+              本地发布服务未连接，请重新打开 Social Publisher；如果仍未恢复再联系维护人员。
             </div>
           )}
 
@@ -386,16 +386,16 @@ const AccountManagerTab: React.FC = () => {
                         color={account.sessionStatus === "ready" ? "success" : "primary"}
                         startContent={<Play className="size-4" />}
                         onPress={async () => {
-                          setMessage(`正在启动 ${account.label} 的独立 Chrome 会话…`);
+                          setMessage(`正在打开 ${account.label}…`);
                           try {
                             await launchSessionAccount(account.id);
-                            setMessage("账号专用浏览器窗口已启动。第一次使用请在该窗口登录对应平台账号；以后会保留这个账号的登录状态。");
+                            setMessage("账号窗口已打开。第一次使用请完成平台登录，以后会保留登录状态。");
                             await reload();
                           } catch (error) {
                             setMessage(String(error instanceof Error ? error.message : error));
                           }
                         }}>
-                        {account.sessionStatus === "ready" ? "打开账号窗口" : "启动账号窗口"}
+                        {account.sessionStatus === "ready" ? "打开账号" : "登录账号"}
                       </Button>
 
                       <Button
