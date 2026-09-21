@@ -10,7 +10,17 @@ $output = Join-Path $distDir "SocialPublisher.exe"
 
 if (Test-Path $output) { Remove-Item $output -Force }
 
-Add-Type -Path $source -ReferencedAssemblies @("System.Net.Http.dll") -OutputAssembly $output -OutputType WindowsApplication -CompilerOptions "/langversion:latest"
+$frameworkRoot = [System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory()
+$csc = Join-Path $frameworkRoot "csc.exe"
+
+if (-not (Test-Path $csc)) {
+  throw "C# compiler not found: $csc"
+}
+
+& $csc /nologo /target:winexe /out:"$output" /reference:System.Net.Http.dll "$source"
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path $output)) {
+  throw "Desktop launcher compilation failed."
+}
 
 Write-Host "Desktop launcher ready:"
 Write-Host $output
