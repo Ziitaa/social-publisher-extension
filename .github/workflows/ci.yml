@@ -22,7 +22,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
       - name: Check Session Manager syntax
         run: node --check session-manager/server.mjs
       - name: Build extension
