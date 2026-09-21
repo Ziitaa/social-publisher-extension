@@ -66,6 +66,13 @@ Start-Process $exe
 '@
 $install | Set-Content (Join-Path $outRoot "安装并启动.ps1") -Encoding UTF8
 
+$cmd = @'
+@echo off
+cd /d "%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0安装并启动.ps1"
+'@
+$cmd | Set-Content (Join-Path $outRoot "安装并启动.cmd") -Encoding ASCII
+
 $readme = @'
 Social Publisher 桌面版
 
