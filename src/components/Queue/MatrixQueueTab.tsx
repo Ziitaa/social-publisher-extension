@@ -81,11 +81,64 @@ const MatrixQueueTab: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [contentType]);
 
-  const grouped = useMemo(() => {
-    return platforms.map((platformInfo) => ({
-      platformInfo,
-      accounts: accounts.filter((account) => account.platform === platformInfo.accountKey),
-    }));
+  const platformGroups = useMemo(() => {
+    const domesticPriority = [
+      "douyin",
+      "rednote",
+      "weixinchannel",
+      "weixin",
+      "bilibili",
+      "weibo",
+      "kuaishou",
+      "zhihu",
+      "toutiao",
+      "toutiaohao",
+      "baijiahao",
+    ];
+    const internationalPriority = [
+      "tiktok",
+      "instagram",
+      "facebook",
+      "x",
+      "linkedin",
+      "youtube",
+      "pinterest",
+      "threads",
+      "reddit",
+      "bluesky",
+    ];
+
+    const rank = (key: string, priority: string[]) => {
+      const index = priority.indexOf(key);
+      return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+    };
+
+    const decorate = (items: PlatformInfo[]) =>
+      items
+        .map((platformInfo) => ({
+          platformInfo,
+          accounts: accounts.filter((account) => account.platform === platformInfo.accountKey),
+        }));
+
+    const domestic = platforms.filter((item) => item.tags?.includes("CN"));
+    const international = platforms.filter((item) => !item.tags?.includes("CN"));
+
+    const domesticCommon = decorate(domestic.filter((item) => domesticPriority.includes(item.accountKey)))
+      .sort((a, b) => rank(a.platformInfo.accountKey, domesticPriority) - rank(b.platformInfo.accountKey, domesticPriority));
+    const domesticOther = decorate(domestic.filter((item) => !domesticPriority.includes(item.accountKey)))
+      .sort((a, b) => a.platformInfo.platformName.localeCompare(b.platformInfo.platformName, "zh-CN"));
+
+    const internationalCommon = decorate(international.filter((item) => internationalPriority.includes(item.accountKey)))
+      .sort((a, b) => rank(a.platformInfo.accountKey, internationalPriority) - rank(b.platformInfo.accountKey, internationalPriority));
+    const internationalOther = decorate(international.filter((item) => !internationalPriority.includes(item.accountKey)))
+      .sort((a, b) => a.platformInfo.platformName.localeCompare(b.platformInfo.platformName, "en"));
+
+    return [
+      { key: "domestic-common", title: "国内常用", items: domesticCommon },
+      { key: "domestic-other", title: "国内其他", items: domesticOther },
+      { key: "international-common", title: "国际常用", items: internationalCommon },
+      { key: "international-other", title: "国际其他", items: internationalOther },
+    ].filter((group) => group.items.length > 0);
   }, [accounts, platforms]);
 
   const toggleAccount = (id: string, checked: boolean) => {
@@ -308,76 +361,96 @@ const MatrixQueueTab: React.FC = () => {
             <h4 className="font-semibold">选择账号</h4>
             <span className="text-xs text-default-500">{selected.length}/{accounts.length}</span>
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {grouped.map(({ platformInfo, accounts: items }) => {
-              const selectedCount = items.filter((item) => selected.includes(item.id)).length;
-              return (
-                <div
-                  key={platformInfo.accountKey}
-                  className={`rounded-xl border p-3 ${items.length ? "border-divider" : "border-divider bg-default-50 opacity-70"}`}>
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      {platformInfo.iconifyIcon ? (
-                        <Icon icon={platformInfo.iconifyIcon} className="size-5" />
-                      ) : platformInfo.faviconUrl ? (
-                        <img src={platformInfo.faviconUrl} alt="" className="size-5 rounded-sm" />
-                      ) : null}
-                      <div>
-                        <div className="font-medium">{platformInfo.platformName}</div>
-                        <div className="text-xs text-default-500">
-                          {items.length ? `${items.length} 个账号 · 已选 ${selectedCount}` : "0 个账号 · 去账号池添加"}
-                        </div>
-                      </div>
-                    </div>
-                    {items.length > 0 && (
-                      <Button
-                        size="sm"
-                        variant="light"
-                        onPress={() => {
-                          const ids = items.map((item) => item.id);
-                          const allSelected = ids.every((id) => selected.includes(id));
-                          setSelected((prev) =>
-                            allSelected
-                              ? prev.filter((id) => !ids.includes(id))
-                              : [...new Set([...prev, ...ids])],
-                          );
-                        }}>
-                        {selectedCount === items.length ? "取消全选" : "全选"}
-                      </Button>
-                    )}
-                  </div>
+          <div className="flex flex-col gap-6">
+            {platformGroups.map((group) => (
+              <section key={group.key}>
+                <div className="mb-3 flex items-center justify-between">
+                  <h5 className="text-sm font-semibold text-default-700">{group.title}</h5>
+                  <span className="text-xs text-default-400">{group.items.length} 个平台</span>
+                </div>
 
-                  {items.length > 0 ? (
-                    <div className="flex flex-col gap-2">
-                      {items.map((account) => (
-                        <label key={account.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg p-2 hover:bg-default-100">
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              isSelected={selected.includes(account.id)}
-                              onValueChange={(checked) => toggleAccount(account.id, checked)}
-                            />
-                            <div>
-                              <div className="text-sm font-medium">{account.label}</div>
-                              <div className="text-xs text-default-500">{account.username || "未填写用户名"}</div>
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {group.items.map(({ platformInfo, accounts: items }) => {
+                    const selectedCount = items.filter((item) => selected.includes(item.id)).length;
+                    return (
+                      <div
+                        key={platformInfo.accountKey}
+                        className={`rounded-xl border p-3 ${items.length ? "border-divider" : "border-divider bg-default-50 opacity-75"}`}>
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <div className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default-100">
+                              {platformInfo.iconifyIcon ? (
+                                <Icon icon={platformInfo.iconifyIcon} className="!size-5" />
+                              ) : platformInfo.faviconUrl ? (
+                                <img
+                                  src={platformInfo.faviconUrl}
+                                  alt=""
+                                  className="!h-5 !w-5 max-h-5 max-w-5 object-contain"
+                                />
+                              ) : null}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate font-medium">{platformInfo.platformName}</div>
+                              <div className="text-xs text-default-500">
+                                {items.length ? `${items.length} 个账号 · 已选 ${selectedCount}` : "0 个账号 · 去账号池添加"}
+                              </div>
                             </div>
                           </div>
-                          <Chip
-                            size="sm"
-                            variant="flat"
-                            color={account.sessionStatus === "ready" ? "success" : "default"}>
-                            {account.sessionStatus === "ready" ? "会话就绪" : "未启动"}
-                          </Chip>
-                        </label>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-lg bg-default-100 p-3 text-xs text-default-500">
-                      此平台已支持发布，但还没有加入任何账号。
-                    </div>
-                  )}
+
+                          {items.length > 0 && (
+                            <Button
+                              size="sm"
+                              variant="light"
+                              onPress={() => {
+                                const ids = items.map((item) => item.id);
+                                const allSelected = ids.every((id) => selected.includes(id));
+                                setSelected((prev) =>
+                                  allSelected
+                                    ? prev.filter((id) => !ids.includes(id))
+                                    : [...new Set([...prev, ...ids])],
+                                );
+                              }}>
+                              {selectedCount === items.length ? "取消全选" : "全选"}
+                            </Button>
+                          )}
+                        </div>
+
+                        {items.length > 0 ? (
+                          <div className="flex flex-col gap-2">
+                            {items.map((account) => (
+                              <label
+                                key={account.id}
+                                className="flex cursor-pointer items-center justify-between gap-3 rounded-lg p-2 hover:bg-default-100">
+                                <div className="flex items-center gap-2">
+                                  <Checkbox
+                                    isSelected={selected.includes(account.id)}
+                                    onValueChange={(checked) => toggleAccount(account.id, checked)}
+                                  />
+                                  <div>
+                                    <div className="text-sm font-medium">{account.label}</div>
+                                    <div className="text-xs text-default-500">{account.username || "未填写用户名"}</div>
+                                  </div>
+                                </div>
+                                <Chip
+                                  size="sm"
+                                  variant="flat"
+                                  color={account.sessionStatus === "ready" ? "success" : "default"}>
+                                  {account.sessionStatus === "ready" ? "会话就绪" : "未启动"}
+                                </Chip>
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="rounded-lg bg-default-100 p-3 text-xs text-default-500">
+                            此平台已支持发布，但还没有加入任何账号。
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              </section>
+            ))}
           </div>
           {!platforms.length && <div className="text-sm text-default-500">暂无可用平台适配器。</div>}
         </CardBody>
