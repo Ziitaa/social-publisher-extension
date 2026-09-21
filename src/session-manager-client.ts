@@ -5,6 +5,7 @@ export interface SessionManagerAccount {
   label: string;
   username?: string;
   status?: string;
+  homeUrl?: string;
   sessionStatus?: "offline" | "starting" | "ready" | "unknown";
   createdAt?: number;
   updatedAt?: number;
