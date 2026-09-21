@@ -1,10 +1,11 @@
 import "~style.css";
 import { HeroUIProvider, Tab, Tabs } from "@heroui/react";
-import { FileText, Image as ImageIcon, Settings as SettingsIcon, UsersRound, Video } from "lucide-react";
+import { FileText, Image as ImageIcon, ListChecks, Settings as SettingsIcon, UsersRound, Video } from "lucide-react";
 import type React from "react";
 import ArticleTab from "~components/Sync/ArticleTab";
 import DynamicTab from "~components/Sync/DynamicTab";
 import AccountManagerTab from "~components/Accounts/AccountManagerTab";
+import MatrixQueueTab from "~components/Queue/MatrixQueueTab";
 import SettingsTab from "~components/Sync/SettingsTab";
 import VideoTab from "~components/Sync/VideoTab";
 import type { SyncData } from "~sync/common";
@@ -112,6 +113,19 @@ const App: React.FC = () => {
               }>
               <div className="pt-4">
                 <ArticleTab funcPublish={publish} funcScraper={scrapePage} />
+              </div>
+            </Tab>
+
+            <Tab
+              key="queue"
+              title={
+                <div className="flex items-center gap-2">
+                  <ListChecks className="size-4" />
+                  <span>批量队列</span>
+                </div>
+              }>
+              <div className="pt-4">
+                <MatrixQueueTab />
               </div>
             </Tab>
 
