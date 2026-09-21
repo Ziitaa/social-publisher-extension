@@ -1,16 +1,17 @@
-import { Button, Card, CardBody, Input, Select, SelectItem } from "@heroui/react";
-import { Plus, Trash2, UsersRound } from "lucide-react";
+import { Button, Card, CardBody, Chip, Input, Select, SelectItem } from "@heroui/react";
+import { Play, Plus, RefreshCw, Trash2, UsersRound } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
-  type ManagedAccount,
-  type ManagedPlatform,
-  listManagedAccounts,
-  removeManagedAccount,
-  upsertManagedAccount,
-} from "~accounts/pool";
+  deleteSessionAccount,
+  getSessionManagerHealth,
+  launchSessionAccount,
+  listSessionAccounts,
+  type SessionManagerAccount,
+  upsertSessionAccount,
+} from "~session-manager-client";
 
-const PLATFORM_OPTIONS: Array<{ key: ManagedPlatform; label: string }> = [
+const PLATFORM_OPTIONS = [
   { key: "douyin", label: "抖音" },
   { key: "rednote", label: "小红书" },
   { key: "bilibili", label: "哔哩哔哩" },
@@ -20,22 +21,36 @@ const PLATFORM_OPTIONS: Array<{ key: ManagedPlatform; label: string }> = [
   { key: "x", label: "X" },
   { key: "youtube", label: "YouTube" },
   { key: "other", label: "其他" },
-];
+] as const;
 
 const AccountManagerTab: React.FC = () => {
-  const [accounts, setAccounts] = useState<ManagedAccount[]>([]);
-  const [platform, setPlatform] = useState<ManagedPlatform>("douyin");
+  const [accounts, setAccounts] = useState<SessionManagerAccount[]>([]);
+  const [platform, setPlatform] = useState("douyin");
   const [label, setLabel] = useState("");
   const [username, setUsername] = useState("");
+  const [online, setOnline] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const reload = async () => setAccounts(await listManagedAccounts());
+  const reload = async () => {
+    try {
+      await getSessionManagerHealth();
+      setOnline(true);
+      setAccounts(await listSessionAccounts());
+    } catch {
+      setOnline(false);
+      setAccounts([]);
+    }
+  };
 
   useEffect(() => {
     reload();
+    const timer = window.setInterval(reload, 5000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const grouped = useMemo(() => {
-    const map = new Map<string, ManagedAccount[]>();
+    const map = new Map<string, SessionManagerAccount[]>();
     for (const account of accounts) {
       const items = map.get(account.platformLabel) || [];
       items.push(account);
@@ -46,37 +61,68 @@ const AccountManagerTab: React.FC = () => {
 
   const handleAdd = async () => {
     const trimmed = label.trim();
-    if (!trimmed) return;
+    if (!trimmed || !online) return;
     const platformLabel = PLATFORM_OPTIONS.find((item) => item.key === platform)?.label || platform;
-    await upsertManagedAccount({
-      platform,
-      platformLabel,
-      label: trimmed,
-      username: username.trim(),
-      status: "unknown",
-    });
-    setLabel("");
-    setUsername("");
-    await reload();
+    setBusy(true);
+    try {
+      await upsertSessionAccount({
+        id: crypto.randomUUID(),
+        platform,
+        platformLabel,
+        label: trimmed,
+        username: username.trim(),
+        status: "unknown",
+      });
+      setLabel("");
+      setUsername("");
+      setMessage("账号已加入账号池。下一步点“启动/登录”绑定独立会话。");
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const statusChip = (status?: string) => {
+    if (status === "ready") return <Chip size="sm" color="success" variant="flat">已绑定</Chip>;
+    if (status === "starting") return <Chip size="sm" color="warning" variant="flat">启动中</Chip>;
+    return <Chip size="sm" variant="flat">未绑定</Chip>;
   };
 
   return (
     <div className="flex flex-col gap-4">
       <Card className="shadow-none bg-default-50">
         <CardBody className="gap-3">
-          <div>
-            <h3 className="text-lg font-semibold">账号池</h3>
-            <p className="text-sm text-default-500">
-              这里先管理账号记录。真正的独立登录会话将在本地 Session Manager 接入后绑定到每个账号。
-            </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold">账号池</h3>
+              <p className="text-sm text-default-500">
+                每个账号绑定一个独立 Chrome 会话。不同账号不会共用登录 Cookie。
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Chip color={online ? "success" : "danger"} variant="flat" size="sm">
+                Session Manager {online ? "在线" : "未启动"}
+              </Chip>
+              <Button isIconOnly size="sm" variant="light" onPress={reload} aria-label="刷新">
+                <RefreshCw className="size-4" />
+              </Button>
+            </div>
           </div>
+
+          {!online && (
+            <div className="rounded-xl border border-warning-200 bg-warning-50 p-3 text-sm">
+              先在 PowerShell 启动本地 Session Manager：
+              <code className="ml-2">powershell -ExecutionPolicy Bypass -File .\start-session-manager.ps1</code>
+            </div>
+          )}
+
           <div className="grid gap-3 md:grid-cols-[180px_1fr_1fr_auto]">
             <Select
               label="平台"
               selectedKeys={[platform]}
               onSelectionChange={(keys) => {
-                const next = Array.from(keys)[0] as ManagedPlatform | undefined;
-                if (next) setPlatform(next);
+                const next = Array.from(keys)[0];
+                if (next) setPlatform(String(next));
               }}>
               {PLATFORM_OPTIONS.map((item) => (
                 <SelectItem key={item.key}>{item.label}</SelectItem>
@@ -84,10 +130,16 @@ const AccountManagerTab: React.FC = () => {
             </Select>
             <Input label="账号备注名" placeholder="例如：抖音001" value={label} onValueChange={setLabel} />
             <Input label="平台用户名（可选）" placeholder="@username / 昵称" value={username} onValueChange={setUsername} />
-            <Button color="primary" className="self-end" startContent={<Plus className="size-4" />} onPress={handleAdd}>
+            <Button
+              color="primary"
+              className="self-end"
+              isDisabled={!online || busy}
+              startContent={<Plus className="size-4" />}
+              onPress={handleAdd}>
               添加
             </Button>
           </div>
+          {message && <div className="text-xs text-default-500">{message}</div>}
         </CardBody>
       </Card>
 
@@ -95,8 +147,10 @@ const AccountManagerTab: React.FC = () => {
         <Card className="shadow-none bg-default-50">
           <CardBody className="items-center gap-2 py-12 text-center">
             <UsersRound className="size-8 text-default-400" />
-            <div className="font-medium">还没有账号</div>
-            <div className="text-sm text-default-500">先把你要管理的平台账号批量录进来。</div>
+            <div className="font-medium">{online ? "还没有账号" : "等待 Session Manager"}</div>
+            <div className="text-sm text-default-500">
+              {online ? "先把你要管理的平台账号录进来，再逐个绑定独立会话。" : "启动后账号池会自动连接本地服务。"}
+            </div>
           </CardBody>
         </Card>
       ) : (
@@ -109,25 +163,49 @@ const AccountManagerTab: React.FC = () => {
               </div>
               <div className="flex flex-col divide-y divide-divider">
                 {items.map((account) => (
-                  <div key={account.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <div className="font-medium">{account.label}</div>
-                      <div className="text-xs text-default-500">
-                        {account.username || "未填写用户名"} · 会话未绑定
+                  <div key={account.id} className="flex items-center justify-between gap-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium">{account.label}</div>
+                        {statusChip(account.sessionStatus)}
+                      </div>
+                      <div className="mt-1 text-xs text-default-500">
+                        {account.username || "未填写用户名"} · {account.id.slice(0, 8)}
                       </div>
                     </div>
-                    <Button
-                      isIconOnly
-                      size="sm"
-                      variant="light"
-                      color="danger"
-                      aria-label="删除账号"
-                      onPress={async () => {
-                        await removeManagedAccount(account.id);
-                        await reload();
-                      }}>
-                      <Trash2 className="size-4" />
-                    </Button>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="flat"
+                        color={account.sessionStatus === "ready" ? "success" : "primary"}
+                        startContent={<Play className="size-4" />}
+                        onPress={async () => {
+                          setMessage(`正在启动 ${account.label} 的独立 Chrome 会话…`);
+                          try {
+                            await launchSessionAccount(account.id);
+                            setMessage("新 Chrome 窗口已启动。请在那个窗口里登录这个账号。");
+                            await reload();
+                          } catch (error) {
+                            setMessage(String(error instanceof Error ? error.message : error));
+                          }
+                        }}>
+                        {account.sessionStatus === "ready" ? "打开会话" : "启动/登录"}
+                      </Button>
+
+                      <Button
+                        isIconOnly
+                        size="sm"
+                        variant="light"
+                        color="danger"
+                        aria-label="删除账号"
+                        onPress={async () => {
+                          await deleteSessionAccount(account.id);
+                          await reload();
+                        }}>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
