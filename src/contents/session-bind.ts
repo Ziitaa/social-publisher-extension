@@ -34,17 +34,7 @@ async function bindSession() {
     .then((response) => (response.ok ? response.json() : null))
     .catch(() => null);
 
-  const homeByPlatform: Record<string, string> = {
-    douyin: "https://creator.douyin.com/",
-    rednote: "https://creator.xiaohongshu.com/",
-    bilibili: "https://member.bilibili.com/",
-    weibo: "https://weibo.com/",
-    zhihu: "https://www.zhihu.com/",
-    tiktok: "https://www.tiktok.com/",
-    x: "https://x.com/",
-    youtube: "https://studio.youtube.com/",
-  };
-  const homeUrl = account?.platform ? homeByPlatform[account.platform] : null;
+  const homeUrl = account?.homeUrl || null;
   if (homeUrl) {
     window.setTimeout(() => window.location.replace(homeUrl), 1200);
   }
