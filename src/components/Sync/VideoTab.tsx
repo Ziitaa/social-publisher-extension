@@ -157,16 +157,7 @@ const VideoTab: React.FC<VideoTabProps> = ({ funcPublish }) => {
 
     const data: SyncData = getSyncData();
 
-    try {
-      chrome.windows.getCurrent({ populate: true }, (window) => {
-        chrome.sidePanel.open({ windowId: window.id }).then(() => {
-          funcPublish(data);
-        });
-      });
-    } catch (error) {
-      console.error("检查服务状态时出错:", error);
-      funcPublish(data);
-    }
+    funcPublish(data);
   };
 
   const handleIconClick = () => {
