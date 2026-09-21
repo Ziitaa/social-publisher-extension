@@ -21,6 +21,7 @@ const emptyState = () => ({
   tasks: [],
   sessions: {},
   batches: {},
+  groups: [],
 });
 
 async function ensureRuntime() {
@@ -38,6 +39,7 @@ async function loadState() {
     state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
     state.sessions = state.sessions && typeof state.sessions === "object" ? state.sessions : {};
     state.batches = state.batches && typeof state.batches === "object" ? state.batches : {};
+    state.groups = Array.isArray(state.groups) ? state.groups : [];
     return state;
   } catch {
     const state = emptyState();
@@ -167,6 +169,8 @@ function normalizeAccount(input, existing) {
     platformLabel: String(input.platformLabel || existing?.platformLabel || input.platform || "其他"),
     label: String(input.label || existing?.label || "").trim(),
     username: String(input.username || existing?.username || "").trim(),
+    purpose: String(input.purpose || existing?.purpose || "general"),
+    owner: String(input.owner || existing?.owner || "").trim(),
     status: String(input.status || existing?.status || "unknown"),
     homeUrl: String(input.homeUrl || existing?.homeUrl || ""),
     createdAt: existing?.createdAt || now,
@@ -219,6 +223,48 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/api/groups") {
+      const state = await loadState();
+      sendJson(res, 200, state.groups.slice().sort((a, b) => a.name.localeCompare(b.name, "zh-CN")));
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/api/groups") {
+      const input = await readJson(req);
+      const name = String(input.name || "").trim();
+      if (!name) throw new Error("Group name is required");
+      const state = await loadState();
+      const now = Date.now();
+      const existingIndex = input.id ? state.groups.findIndex((item) => item.id === input.id) : -1;
+      const existing = existingIndex >= 0 ? state.groups[existingIndex] : null;
+      const accountIds = Array.isArray(input.accountIds)
+        ? input.accountIds.filter((id) => state.accounts.some((account) => account.id === id))
+        : [];
+      const group = {
+        id: input.id || existing?.id || crypto.randomUUID(),
+        name,
+        description: String(input.description || existing?.description || "").trim(),
+        accountIds,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+      };
+      if (existingIndex >= 0) state.groups[existingIndex] = group;
+      else state.groups.push(group);
+      await saveState(state);
+      sendJson(res, 200, group);
+      return;
+    }
+
+    const groupDelete = pathname.match(/^\/api\/groups\/([^/]+)$/);
+    if (req.method === "DELETE" && groupDelete) {
+      const id = decodeURIComponent(groupDelete[1]);
+      const state = await loadState();
+      state.groups = state.groups.filter((item) => item.id !== id);
+      await saveState(state);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
     const accountRead = pathname.match(/^\/api\/accounts\/([^/]+)$/);
     if (req.method === "GET" && accountRead) {
       const id = decodeURIComponent(accountRead[1]);
@@ -238,6 +284,11 @@ const server = http.createServer(async (req, res) => {
       const state = await loadState();
       state.accounts = state.accounts.filter((item) => item.id !== id);
       state.tasks = state.tasks.filter((task) => task.accountId !== id || task.status !== "queued");
+      state.groups = state.groups.map((group) => ({
+        ...group,
+        accountIds: group.accountIds.filter((accountId) => accountId !== id),
+        updatedAt: Date.now(),
+      }));
       delete state.sessions[id];
       await saveState(state);
       sendJson(res, 200, { ok: true });
@@ -318,9 +369,15 @@ const server = http.createServer(async (req, res) => {
       const state = await loadState();
       const now = Date.now();
       const batchId = crypto.randomUUID();
+      const campaignName = String(body.campaignName || "").trim();
+      const campaignType = ["recruitment", "product", "b2b", "custom"].includes(body.campaignType)
+        ? body.campaignType
+        : "custom";
       state.batches[batchId] = {
         id: batchId,
         contentType,
+        campaignName,
+        campaignType,
         sharedData: body.sharedData || {},
         createdAt: now,
       };
@@ -337,6 +394,8 @@ const server = http.createServer(async (req, res) => {
           platformInfo,
           batchId,
           contentType,
+          campaignName,
+          campaignType,
           status: "queued",
           createdAt: now,
           updatedAt: now,
