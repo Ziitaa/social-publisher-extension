@@ -277,14 +277,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
 
     const data: SyncData = getSyncData();
 
-    try {
-      const window = await chrome.windows.getCurrent({ populate: true });
-      await chrome.sidePanel.open({ windowId: window.id });
-      funcPublish(data);
-    } catch (error) {
-      console.error("发布时出错:", error);
-      funcPublish(data);
-    }
+    funcPublish(data);
   };
 
   // 清空所有内容
