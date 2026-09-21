@@ -22,7 +22,8 @@ export interface MatrixTask {
   status: "queued" | "dispatched" | "failed";
   createdAt: number;
   updatedAt: number;
-  payload: MatrixTaskPayload;
+  contentType?: "DYNAMIC" | "VIDEO";
+  payload?: MatrixTaskPayload;
   error?: string;
 }
 
@@ -78,4 +79,16 @@ export async function enqueueMatrixTasks(
 
 export async function listMatrixTasks(): Promise<MatrixTask[]> {
   return request("/api/tasks");
+}
+
+export async function enqueueMatrixBatch(input: {
+  accountIds: string[];
+  contentType: "DYNAMIC" | "VIDEO";
+  sharedData: unknown;
+  platformByAccount: Record<string, unknown>;
+}): Promise<MatrixTask[]> {
+  return request("/api/tasks/batch", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
