@@ -4,11 +4,22 @@ export interface SessionManagerAccount {
   platformLabel: string;
   label: string;
   username?: string;
+  purpose?: "recruitment" | "product" | "b2b" | "general";
+  owner?: string;
   status?: string;
   homeUrl?: string;
   sessionStatus?: "offline" | "starting" | "ready" | "unknown";
   createdAt?: number;
   updatedAt?: number;
+}
+
+export interface AccountGroup {
+  id: string;
+  name: string;
+  description?: string;
+  accountIds: string[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface MatrixTaskPayload {
@@ -24,6 +35,8 @@ export interface MatrixTask {
   createdAt: number;
   updatedAt: number;
   contentType?: "DYNAMIC" | "VIDEO";
+  campaignName?: string;
+  campaignType?: "recruitment" | "product" | "b2b" | "custom";
   payload?: MatrixTaskPayload;
   error?: string;
 }
@@ -85,6 +98,8 @@ export async function listMatrixTasks(): Promise<MatrixTask[]> {
 export async function enqueueMatrixBatch(input: {
   accountIds: string[];
   contentType: "DYNAMIC" | "VIDEO";
+  campaignName?: string;
+  campaignType?: "recruitment" | "product" | "b2b" | "custom";
   sharedData: unknown;
   platformByAccount: Record<string, unknown>;
 }): Promise<MatrixTask[]> {
@@ -92,4 +107,24 @@ export async function enqueueMatrixBatch(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function listAccountGroups(): Promise<AccountGroup[]> {
+  return request("/api/groups");
+}
+
+export async function saveAccountGroup(input: {
+  id?: string;
+  name: string;
+  description?: string;
+  accountIds: string[];
+}): Promise<AccountGroup> {
+  return request("/api/groups", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteAccountGroup(id: string): Promise<void> {
+  await request(`/api/groups/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
