@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - safe-publish-v0
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check Session Manager syntax
+        run: node --check session-manager/server.mjs
+      - name: Build extension
+        run: pnpm build
