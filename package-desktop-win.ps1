@@ -15,9 +15,11 @@ if (-not $browserExe) {
 }
 
 $node = (Get-Command node.exe -ErrorAction Stop).Source
-
 $outRoot = Join-Path $repoRoot "dist\Social-Publisher-Desktop"
-if (Test-Path $outRoot) { Remove-Item $outRoot -Recurse -Force }
+
+if (Test-Path $outRoot) {
+  Remove-Item $outRoot -Recurse -Force
+}
 
 New-Item -ItemType Directory -Force -Path $outRoot | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $outRoot "dist") | Out-Null
@@ -33,67 +35,60 @@ Copy-Item ".\run-session-manager.ps1" (Join-Path $outRoot "run-session-manager.p
 Copy-Item $node (Join-Path $outRoot "runtime\node.exe") -Force
 Copy-Item $browserRoot (Join-Path $outRoot ".social-publisher\browser") -Recurse -Force
 
-$install = @'
-$ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$exe = Join-Path $root "dist\SocialPublisher.exe"
+$installLines = @(
+  '$ErrorActionPreference = "Stop"',
+  '$root = Split-Path -Parent $MyInvocation.MyCommand.Path',
+  '$exe = Join-Path $root "dist\SocialPublisher.exe"',
+  '$desktop = [Environment]::GetFolderPath("Desktop")',
+  '$wsh = New-Object -ComObject WScript.Shell',
+  '$shortcut = $wsh.CreateShortcut((Join-Path $desktop "Social Publisher.lnk"))',
+  '$shortcut.TargetPath = $exe',
+  '$shortcut.WorkingDirectory = $root',
+  '$shortcut.Description = "Social Publisher"',
+  '$shortcut.Save()',
+  '$startupDir = [Environment]::GetFolderPath("Startup")',
+  '$service = $wsh.CreateShortcut((Join-Path $startupDir "Social Publisher Service.lnk"))',
+  '$service.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"',
+  '$service.Arguments = ''-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'' + $root + ''\run-session-manager.ps1"''',
+  '$service.WorkingDirectory = $root',
+  '$service.Description = "Social Publisher local service"',
+  '$service.Save()',
+  'try { Invoke-RestMethod -Uri "http://127.0.0.1:2663/api/health" -TimeoutSec 1 | Out-Null } catch {',
+  '  Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @("-NoProfile","-ExecutionPolicy","Bypass","-File",(Join-Path $root "run-session-manager.ps1"))',
+  '  Start-Sleep -Seconds 2',
+  '}',
+  'Start-Process $exe'
+)
+$installLines | Set-Content (Join-Path $outRoot "Install.ps1") -Encoding ASCII
 
-$desktop = [Environment]::GetFolderPath("Desktop")
-$wsh = New-Object -ComObject WScript.Shell
+$cmdLines = @(
+  '@echo off',
+  'cd /d "%~dp0"',
+  'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install.ps1"'
+)
+$cmdLines | Set-Content (Join-Path $outRoot "Install.cmd") -Encoding ASCII
 
-$shortcut = $wsh.CreateShortcut((Join-Path $desktop "Social Publisher.lnk"))
-$shortcut.TargetPath = $exe
-$shortcut.WorkingDirectory = $root
-$shortcut.Description = "Social Publisher"
-$shortcut.Save()
-
-$startupDir = [Environment]::GetFolderPath("Startup")
-$service = $wsh.CreateShortcut((Join-Path $startupDir "Social Publisher Service.lnk"))
-$service.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-$service.Arguments = '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $root + '\run-session-manager.ps1"'
-$service.WorkingDirectory = $root
-$service.Description = "Social Publisher local service"
-$service.Save()
-
-try {
-  Invoke-RestMethod -Uri "http://127.0.0.1:2663/api/health" -TimeoutSec 1 | Out-Null
-} catch {
-  Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @("-NoProfile","-ExecutionPolicy","Bypass","-File",(Join-Path $root "run-session-manager.ps1"))
-  Start-Sleep -Seconds 2
-}
-
-Start-Process $exe
-'@
-$install | Set-Content (Join-Path $outRoot "安装并启动.ps1") -Encoding UTF8
-
-$cmd = @'
-@echo off
-cd /d "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0安装并启动.ps1"
-'@
-$cmd | Set-Content (Join-Path $outRoot "安装并启动.cmd") -Encoding ASCII
-
-$readme = @'
-Social Publisher 桌面版
-
-首次安装：
-1. 将整个文件夹复制到电脑固定位置。
-2. 右键“安装并启动.ps1” -> 使用 PowerShell 运行。
-3. 桌面会生成 Social Publisher 快捷方式。
-4. 以后双击桌面 Social Publisher 即可。
-
-不需要：
-- Google / Gmail 账号
-- Chrome 开发者模式
-- 手工安装浏览器扩展
-- 手工启动 PowerShell 后台服务
-
-平台账号仍需要在首次绑定时登录一次。
-'@
-$readme | Set-Content (Join-Path $outRoot "使用说明.txt") -Encoding UTF8
+$readmeLines = @(
+  'Social Publisher Desktop',
+  '',
+  'First-time setup:',
+  '1. Extract the whole folder to a fixed location.',
+  '2. Double-click Install.cmd.',
+  '3. A Social Publisher shortcut will be created on the Desktop.',
+  '4. After that, use the Desktop shortcut.',
+  '',
+  'No Google/Gmail account is required.',
+  'No Chrome developer mode is required.',
+  'No manual browser-extension installation is required.',
+  'Platform accounts still need to be signed in once when first bound.'
+)
+$readmeLines | Set-Content (Join-Path $outRoot "README.txt") -Encoding ASCII
 
 $zipPath = Join-Path $repoRoot "dist\Social-Publisher-Desktop.zip"
-if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+if (Test-Path $zipPath) {
+  Remove-Item $zipPath -Force
+}
+
 Compress-Archive -Path (Join-Path $outRoot "*") -DestinationPath $zipPath -Force
 
 Write-Host ""
