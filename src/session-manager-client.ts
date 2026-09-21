@@ -37,6 +37,7 @@ export interface MatrixTask {
   contentType?: "DYNAMIC" | "VIDEO";
   campaignName?: string;
   campaignType?: "recruitment" | "product" | "b2b" | "custom";
+  platformInfo?: { publishMode?: "fill" | "auto"; name?: string };
   payload?: MatrixTaskPayload;
   error?: string;
 }
