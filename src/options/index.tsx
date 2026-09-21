@@ -67,7 +67,7 @@ const App: React.FC = () => {
           <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
             <div>
               <div className="text-xl font-semibold">Social Publisher</div>
-              <div className="text-xs text-default-500">本地发布工作台 · 默认仅填充 · 小红书固定仅填充</div>
+              <div className="text-xs text-default-500">矩阵发布请使用“批量队列” · 默认仅填充 · 小红书固定仅填充</div>
             </div>
             <div className="rounded-full bg-warning-100 px-3 py-1 text-xs text-warning-700">
               Safe Publish
@@ -76,13 +76,13 @@ const App: React.FC = () => {
         </header>
 
         <section className="mx-auto max-w-7xl px-6 py-6">
-          <Tabs aria-label="Social Publisher" variant="underlined" color="primary">
+          <Tabs aria-label="Social Publisher" variant="underlined" color="primary" defaultSelectedKey="queue">
             <Tab
               key="dynamic"
               title={
                 <div className="flex items-center gap-2">
                   <ImageIcon className="size-4" />
-                  <span>图文 / 动态</span>
+                  <span>单账号图文</span>
                 </div>
               }>
               <div className="pt-4">
@@ -95,7 +95,7 @@ const App: React.FC = () => {
               title={
                 <div className="flex items-center gap-2">
                   <Video className="size-4" />
-                  <span>视频</span>
+                  <span>单账号视频</span>
                 </div>
               }>
               <div className="pt-4">
@@ -108,7 +108,7 @@ const App: React.FC = () => {
               title={
                 <div className="flex items-center gap-2">
                   <FileText className="size-4" />
-                  <span>长文</span>
+                  <span>单账号长文</span>
                 </div>
               }>
               <div className="pt-4">
