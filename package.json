@@ -1,7 +1,7 @@
 {
   "name": "__MSG_extensionName__",
   "displayName": "__MSG_extensionDisplayName__",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "__MSG_extensionDescription__",
   "author": "Ziitaa (forked from leaperone/MultiPost-Extension)",
   "scripts": {
@@ -73,11 +73,14 @@
     "externally_connectable": {
       "matches": [
         "https://paiban.md/*",
-        "http://localhost:2663/*"
+        "http://localhost:2663/*",
+        "http://127.0.0.1:2663/*"
       ]
     },
     "host_permissions": [
-      "https://*/*"
+      "https://*/*",
+      "http://127.0.0.1:2663/*",
+      "http://localhost:2663/*"
     ],
     "permissions": [
       "activeTab",
