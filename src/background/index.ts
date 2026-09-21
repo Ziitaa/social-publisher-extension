@@ -8,7 +8,6 @@ import {
   getPlatformInfos,
 } from "~sync/common";
 import QuantumEntanglementKeepAlive from "../utils/keep-alive";
-import { linkExtensionMessageHandler, starter } from "./services/api";
 import {
   addTabsManagerMessages,
   tabsManagerHandleTabRemoved,
@@ -21,33 +20,32 @@ const storage = new Storage({
   area: "local",
 });
 
-async function initDefaultTrustedDomains() {
-  const trustedDomains = await storage.get<Array<{ id: string; domain: string }>>("trustedDomains");
-  if (!trustedDomains) {
-    await storage.set("trustedDomains", [
-      {
-        id: crypto.randomUUID(),
-        domain: "multipost.app",
-      },
-    ]);
-  }
+async function initLocalSecurityState() {
+  const trustedDomains = (await storage.get<Array<{ id: string; domain: string }>>("trustedDomains")) || [];
+  const localDomains = trustedDomains.filter(({ domain }) => domain !== "multipost.app" && !domain.endsWith(".multipost.app"));
+  await storage.set("trustedDomains", localDomains);
+
+  // Legacy SaaS credentials are not used by the standalone fork.
+  await storage.remove("apiKey");
+  await storage.remove("extensionClientId");
 }
 
 chrome.runtime.onInstalled.addListener((object) => {
   if (object.reason === chrome.runtime.OnInstalledReason.INSTALL) {
-    chrome.tabs.create({ url: "https://multipost.app/on-install" });
+    chrome.runtime.openOptionsPage();
   }
-  initDefaultTrustedDomains();
+  initLocalSecurityState();
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 });
+
+initLocalSecurityState();
 
 // Listen Message || 监听消息 || START
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const handled =
     defaultMessageHandler(request, sender, sendResponse) ||
     tabsManagerMessageHandler(request, sender, sendResponse) ||
-    trustDomainMessageHandler(request, sender, sendResponse) ||
-    linkExtensionMessageHandler(request, sender, sendResponse);
+    trustDomainMessageHandler(request, sender, sendResponse);
   return handled;
 });
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -61,6 +59,69 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Message Handler || 消息处理器 || START
 let currentSyncData: SyncData | null = null;
 let currentPublishPopup: chrome.windows.Window | null = null;
+
+const SESSION_MANAGER_BASE_URL = "http://127.0.0.1:2663";
+let matrixTaskBusy = false;
+
+async function sendMatrixReceipt(taskId: string, body: Record<string, unknown>) {
+  await fetch(`${SESSION_MANAGER_BASE_URL}/api/tasks/${encodeURIComponent(taskId)}/receipt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function heartbeatMatrixSession() {
+  const accountId = await storage.get<string>("matrixSessionAccountId");
+  if (!accountId) return;
+  await fetch(`${SESSION_MANAGER_BASE_URL}/api/sessions/${encodeURIComponent(accountId)}/ready`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  }).catch(() => undefined);
+}
+
+async function pollMatrixTaskQueue() {
+  if (matrixTaskBusy) return;
+  const accountId = await storage.get<string>("matrixSessionAccountId");
+  if (!accountId) return;
+
+  matrixTaskBusy = true;
+  try {
+    const response = await fetch(
+      `${SESSION_MANAGER_BASE_URL}/api/tasks/next?accountId=${encodeURIComponent(accountId)}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) return;
+    const body = await response.json();
+    const task = body?.task;
+    if (!task) return;
+
+    try {
+      const syncData = task.payload?.syncData as SyncData;
+      if (!syncData?.platforms?.length) {
+        throw new Error("Task payload missing syncData/platforms");
+      }
+      const tabs = await createTabsForPlatforms(syncData);
+      await sendMatrixReceipt(task.id, {
+        status: "dispatched",
+        accountId,
+        tabs: tabs.map((item) => ({ id: item.tab.id, url: item.tab.url })),
+      });
+    } catch (error) {
+      await sendMatrixReceipt(task.id, {
+        status: "failed",
+        accountId,
+        error: String(error instanceof Error ? error.message : error),
+      });
+    }
+  } catch {
+    // Session Manager may be offline; retry on the next interval.
+  } finally {
+    matrixTaskBusy = false;
+  }
+}
+
 const defaultMessageHandler = (request, _sender, sendResponse) => {
   if (request.action === "MULTIPOST_EXTENSION_CHECK_SERVICE_STATUS") {
     sendResponse({ extensionId: chrome.runtime.id });
@@ -166,8 +227,12 @@ const defaultMessageHandler = (request, _sender, sendResponse) => {
   }
   return false;
 };
-starter(1000 * 30);
 // Message Handler || 消息处理器 || END
+
+setInterval(pollMatrixTaskQueue, 5000);
+setInterval(heartbeatMatrixSession, 10000);
+heartbeatMatrixSession();
+pollMatrixTaskQueue();
 
 // Keep Alive || 保活机制 || START
 const quantumKeepAlive = new QuantumEntanglementKeepAlive();

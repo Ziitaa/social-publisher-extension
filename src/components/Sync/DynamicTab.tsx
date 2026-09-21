@@ -8,10 +8,9 @@ import {
   CardHeader,
   Image,
   Input,
-  Switch,
   Textarea,
 } from "@heroui/react";
-import { BotIcon, Eraser, FileImageIcon, FileVideo2Icon, HandIcon, SendIcon, TrashIcon, XIcon } from "lucide-react";
+import { Eraser, FileImageIcon, FileVideo2Icon, SendIcon, TrashIcon, XIcon } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Viewer from "react-viewer";
@@ -21,13 +20,14 @@ import { Icon } from "@iconify/react";
 import { Storage } from "@plasmohq/storage";
 import { useStorage } from "@plasmohq/storage/hook";
 import { ACCOUNT_INFO_STORAGE_KEY } from "~sync/account";
-import { type FileData, type SyncData, getPlatformInfos } from "~sync/common";
+import { type FileData, type PublishMode, type SyncData, getPlatformInfos, isForcedFillPlatform } from "~sync/common";
 import type { PlatformInfo } from "~sync/common";
 import { EXTRA_CONFIG_STORAGE_KEY } from "~sync/extraconfig";
 import PlatformCheckbox from "./PlatformCheckbox";
 
 // Constants
 const STORAGE_KEY = "dynamicPlatforms";
+const MODE_STORAGE_KEY = "dynamicPlatformModes";
 const MAX_VIDEO_COUNT = 1;
 
 interface DynamicTabProps {
@@ -40,7 +40,7 @@ interface FormState {
   images: FileData[];
   videos: FileData[];
   selectedPlatforms: string[];
-  autoPublish: boolean;
+  platformModes: Record<string, PublishMode>;
 }
 
 const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
@@ -50,7 +50,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
     images: [],
     videos: [],
     selectedPlatforms: [],
-    autoPublish: false,
+    platformModes: {},
   });
 
   const [viewerState, setViewerState] = useState({
@@ -149,10 +149,15 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
   useEffect(() => {
     const loadPlatforms = async () => {
       try {
-        const platforms = await storage.get<string[]>(STORAGE_KEY);
-        if (platforms) {
-          setFormState((prev) => ({ ...prev, selectedPlatforms: platforms }));
-        }
+        const [savedPlatforms, savedModes] = await Promise.all([
+          storage.get<string[]>(STORAGE_KEY),
+          storage.get<Record<string, PublishMode>>(MODE_STORAGE_KEY),
+        ]);
+        setFormState((prev) => ({
+          ...prev,
+          selectedPlatforms: savedPlatforms || [],
+          platformModes: savedModes || {},
+        }));
       } catch (error) {
         console.error("加载平台数据失败:", error);
       }
@@ -229,7 +234,13 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
         ? [...formState.selectedPlatforms, platform]
         : formState.selectedPlatforms.filter((p) => p !== platform);
 
-      setFormState((prev) => ({ ...prev, selectedPlatforms: newPlatforms }));
+      setFormState((prev) => ({
+        ...prev,
+        selectedPlatforms: newPlatforms,
+        platformModes: isSelected && !prev.platformModes[platform]
+          ? { ...prev.platformModes, [platform]: "fill" }
+          : prev.platformModes,
+      }));
       await storage.set(STORAGE_KEY, newPlatforms);
     },
     [formState.selectedPlatforms, storage],
@@ -241,6 +252,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
         name: platform,
         injectUrl: platforms.find((p) => p.name === platform)?.injectUrl || "",
         extraConfig: platforms.find((p) => p.name === platform)?.extraConfig || {},
+        publishMode: isForcedFillPlatform(platform) ? "fill" : (formState.platformModes[platform] || "fill"),
       })),
       data: {
         title: formState.title,
@@ -248,7 +260,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
         images: formState.images,
         videos: formState.videos,
       },
-      isAutoPublish: formState.autoPublish,
+      isAutoPublish: false,
     };
   };
 
@@ -265,14 +277,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
 
     const data: SyncData = getSyncData();
 
-    try {
-      const window = await chrome.windows.getCurrent({ populate: true });
-      await chrome.sidePanel.open({ windowId: window.id });
-      funcPublish(data);
-    } catch (error) {
-      console.error("发布时出错:", error);
-      funcPublish(data);
-    }
+    funcPublish(data);
   };
 
   // 清空所有内容
@@ -283,7 +288,7 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
       images: [],
       videos: [],
       selectedPlatforms: [],
-      autoPublish: false,
+      platformModes: {},
     });
   }, []);
 
@@ -292,6 +297,16 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
     setFormState((prev) => ({ ...prev, selectedPlatforms: [] }));
     await storage.set(STORAGE_KEY, []);
   }, [storage]);
+
+  const handlePublishModeChange = useCallback(
+    async (platform: string, mode: PublishMode) => {
+      if (isForcedFillPlatform(platform)) return;
+      const nextModes = { ...formState.platformModes, [platform]: mode };
+      setFormState((prev) => ({ ...prev, platformModes: nextModes }));
+      await storage.set(MODE_STORAGE_KEY, nextModes);
+    },
+    [formState.platformModes, storage],
+  );
 
   // 删除文件
   const handleDeleteFile = useCallback((index: number, fileType: "image" | "video") => {
@@ -441,13 +456,9 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
         <div className="flex flex-col w-full gap-4 md:w-1/2">
           <div className="flex flex-col gap-4 p-4 rounded-lg bg-default-50">
             <div className="flex items-center justify-between mb-2">
-              <Switch
-                isSelected={formState.autoPublish}
-                onValueChange={(value) => setFormState((prev) => ({ ...prev, autoPublish: value }))}
-                startContent={<BotIcon className="size-4" />}
-                endContent={<HandIcon className="size-4" />}>
-                {chrome.i18n.getMessage("optionsAutoPublish")}
-              </Switch>
+              <div className="text-xs text-default-500">
+                默认仅填充；可逐平台开启自动发布。小红书固定仅填充。
+              </div>
 
               {formState.selectedPlatforms.length > 0 && (
                 <Button
@@ -490,6 +501,8 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
                         onChange={(_, isSelected) => handlePlatformChange(platform.name, isSelected)}
                         isDisabled={false}
                         syncData={getSyncData()}
+                        publishMode={isForcedFillPlatform(platform.name) ? "fill" : (formState.platformModes[platform.name] || "fill")}
+                        onPublishModeChange={(mode) => handlePublishModeChange(platform.name, mode)}
                       />
                     ))}
                 </div>
@@ -520,6 +533,8 @@ const DynamicTab: React.FC<DynamicTabProps> = ({ funcPublish }) => {
                         onChange={(_, isSelected) => handlePlatformChange(platform.name, isSelected)}
                         isDisabled={false}
                         syncData={getSyncData()}
+                        publishMode={isForcedFillPlatform(platform.name) ? "fill" : (formState.platformModes[platform.name] || "fill")}
+                        onPublishModeChange={(mode) => handlePublishModeChange(platform.name, mode)}
                       />
                     ))}
                 </div>

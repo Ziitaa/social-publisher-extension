@@ -33,3 +33,7 @@ yarn-error.log*
 next-env.d.ts
 
 .idea/
+
+# Social Publisher local runtime/session data
+/.social-publisher
+/dist
