@@ -1,7 +1,7 @@
 {
   "name": "__MSG_extensionName__",
   "displayName": "__MSG_extensionDisplayName__",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "__MSG_extensionDescription__",
   "author": "Ziitaa (forked from leaperone/MultiPost-Extension)",
   "scripts": {
@@ -74,7 +74,8 @@
           "https://www.plasmo.com/*"
         ]
       }
-    ]
+    ],
+    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA8+iL5qqEeVXoBAlHKPwM6pekPM+GfhKS8/8qcUivr595XVJh2EdWOYVCjeic12VWIC9Gwm3lxxtm815ySEllkiF/tYIhSxvpLmkly/FIxUVtbjgxleE8Z4h+uFXLjEUqyHG/xntrsT2biy6PPTItIwz405aSdQ6wdvVneLUsI1/7hT5VzAh1dCmeePoe3sS6dxkw9IVtFomXN8Lh7N8O2PAZ2zN08f/mFNzZ/xpW0xBSD9Uu2qjWxB7HeIekvJfV7GsZE8oPXvnG6vsD0dTW7fY5Y/w2QqF5893PKm7eqciJALXFk8xKZQhliFZykRSL+1wJBYqCFQ/MzAdtd22BYwIDAQAB"
   },
   "lint-staged": {
     "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}": [
