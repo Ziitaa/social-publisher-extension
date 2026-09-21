@@ -101,6 +101,7 @@ export async function enqueueMatrixBatch(input: {
   campaignName?: string;
   campaignType?: "recruitment" | "product" | "b2b" | "custom";
   sharedData: unknown;
+  sharedVariants?: Array<{ title?: string; content?: string }>;
   platformByAccount: Record<string, unknown>;
 }): Promise<MatrixTask[]> {
   return request("/api/tasks/batch", {
