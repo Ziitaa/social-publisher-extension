@@ -20,7 +20,7 @@ import {
   type MatrixTask,
   type SessionManagerAccount,
 } from "~session-manager-client";
-import { getPlatformInfos, isForcedFillPlatform, type FileData, type PublishMode, type SyncData } from "~sync/common";
+import { getPlatformInfos, isForcedFillPlatform, type FileData, type PublishMode } from "~sync/common";
 
 type ContentType = "DYNAMIC" | "VIDEO";
 
