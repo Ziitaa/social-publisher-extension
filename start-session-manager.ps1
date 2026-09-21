@@ -2,10 +2,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $repoRoot
 
-if (-not (Test-Path ".\build\chrome-mv3-prod")) {
-  Write-Host "Extension build not found; building first..."
-  pnpm.cmd build
-}
+Write-Host "Building latest Social Publisher extension..."
+pnpm.cmd build
 
 $browserRoot = Join-Path $repoRoot ".social-publisher\browser"
 $browserExe = Get-ChildItem -Path $browserRoot -Filter chrome.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
