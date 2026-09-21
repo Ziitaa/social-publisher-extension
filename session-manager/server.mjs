@@ -187,10 +187,16 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && pathname === "/api/accounts") {
       const state = await loadState();
-      const accounts = state.accounts.map((account) => ({
-        ...account,
-        sessionStatus: state.sessions[account.id]?.status || "offline",
-      }));
+      const now = Date.now();
+      const accounts = state.accounts.map((account) => {
+        const session = state.sessions[account.id];
+        const heartbeatAt = Number(session?.heartbeatAt || 0);
+        const isReady = heartbeatAt > 0 && now - heartbeatAt < 30000;
+        return {
+          ...account,
+          sessionStatus: isReady ? "ready" : session?.status === "starting" ? "starting" : "offline",
+        };
+      });
       sendJson(res, 200, accounts);
       return;
     }
@@ -252,6 +258,7 @@ const server = http.createServer(async (req, res) => {
       state.sessions[accountId] = {
         ...(state.sessions[accountId] || {}),
         status: "ready",
+        heartbeatAt: Date.now(),
         updatedAt: Date.now(),
       };
       await saveState(state);
@@ -296,13 +303,20 @@ const server = http.createServer(async (req, res) => {
       const accountId = url.searchParams.get("accountId");
       if (!accountId) throw new Error("accountId is required");
       const state = await loadState();
-      const task = state.tasks.find((item) => item.accountId === accountId && item.status === "queued");
+      const now = Date.now();
+      const task = state.tasks.find(
+        (item) =>
+          item.accountId === accountId &&
+          item.status === "queued" &&
+          (!item.leaseUntil || Number(item.leaseUntil) < now),
+      );
       if (!task) {
         sendJson(res, 200, { task: null });
         return;
       }
-      task.status = "dispatched";
-      task.updatedAt = Date.now();
+      task.leasedAt = now;
+      task.leaseUntil = now + 2 * 60 * 1000;
+      task.updatedAt = now;
       await saveState(state);
       sendJson(res, 200, { task });
       return;
@@ -317,6 +331,7 @@ const server = http.createServer(async (req, res) => {
       if (!task) throw new Error("Task not found");
       task.status = body.status === "failed" ? "failed" : "dispatched";
       task.error = body.error || "";
+      task.leaseUntil = 0;
       task.receipt = {
         ...body,
         at: Date.now(),
