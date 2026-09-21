@@ -218,6 +218,19 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    const accountRead = pathname.match(/^\/api\/accounts\/([^/]+)$/);
+    if (req.method === "GET" && accountRead) {
+      const id = decodeURIComponent(accountRead[1]);
+      const state = await loadState();
+      const account = state.accounts.find((item) => item.id === id);
+      if (!account) {
+        sendJson(res, 404, { error: "Account not found" });
+        return;
+      }
+      sendJson(res, 200, account);
+      return;
+    }
+
     const accountDelete = pathname.match(/^\/api\/accounts\/([^/]+)$/);
     if (req.method === "DELETE" && accountDelete) {
       const id = decodeURIComponent(accountDelete[1]);
