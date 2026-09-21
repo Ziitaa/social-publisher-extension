@@ -20,6 +20,7 @@ const emptyState = () => ({
   accounts: [],
   tasks: [],
   sessions: {},
+  batches: {},
 });
 
 async function ensureRuntime() {
@@ -32,7 +33,12 @@ async function ensureRuntime() {
 async function loadState() {
   await ensureRuntime();
   try {
-    return JSON.parse(await readFile(statePath, "utf8"));
+    const state = JSON.parse(await readFile(statePath, "utf8"));
+    state.accounts = Array.isArray(state.accounts) ? state.accounts : [];
+    state.tasks = Array.isArray(state.tasks) ? state.tasks : [];
+    state.sessions = state.sessions && typeof state.sessions === "object" ? state.sessions : {};
+    state.batches = state.batches && typeof state.batches === "object" ? state.batches : {};
+    return state;
   } catch {
     const state = emptyState();
     await saveState(state);
@@ -293,6 +299,44 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "POST" && pathname === "/api/tasks/batch") {
+      const body = await readJson(req);
+      const accountIds = Array.isArray(body.accountIds) ? body.accountIds : [];
+      const platformByAccount = body.platformByAccount || {};
+      const contentType = body.contentType === "VIDEO" ? "VIDEO" : "DYNAMIC";
+      const state = await loadState();
+      const now = Date.now();
+      const batchId = crypto.randomUUID();
+      state.batches[batchId] = {
+        id: batchId,
+        contentType,
+        sharedData: body.sharedData || {},
+        createdAt: now,
+      };
+
+      const tasks = accountIds.map((accountId) => {
+        const account = state.accounts.find((item) => item.id === accountId);
+        if (!account) throw new Error(`Unknown account: ${accountId}`);
+        const platformInfo = platformByAccount[accountId];
+        if (!platformInfo) throw new Error(`Missing platform payload for account: ${accountId}`);
+        return {
+          id: crypto.randomUUID(),
+          accountId,
+          platform: account.platform,
+          platformInfo,
+          batchId,
+          contentType,
+          status: "queued",
+          createdAt: now,
+          updatedAt: now,
+        };
+      });
+      state.tasks.push(...tasks);
+      await saveState(state);
+      sendJson(res, 200, tasks);
+      return;
+    }
+
     if (req.method === "GET" && pathname === "/api/tasks") {
       const state = await loadState();
       sendJson(res, 200, state.tasks.slice().sort((a, b) => b.createdAt - a.createdAt));
@@ -318,7 +362,24 @@ const server = http.createServer(async (req, res) => {
       task.leaseUntil = now + 2 * 60 * 1000;
       task.updatedAt = now;
       await saveState(state);
-      sendJson(res, 200, { task });
+
+      let responseTask = task;
+      if (task.batchId) {
+        const batch = state.batches[task.batchId];
+        if (!batch) throw new Error("Task batch not found");
+        responseTask = {
+          ...task,
+          payload: {
+            contentType: task.contentType || batch.contentType,
+            syncData: {
+              platforms: [task.platformInfo],
+              data: batch.sharedData,
+              isAutoPublish: false,
+            },
+          },
+        };
+      }
+      sendJson(res, 200, { task: responseTask });
       return;
     }
 
@@ -337,6 +398,15 @@ const server = http.createServer(async (req, res) => {
         at: Date.now(),
       };
       task.updatedAt = Date.now();
+
+      if (task.batchId) {
+        const siblings = state.tasks.filter((item) => item.batchId === task.batchId);
+        const allFinished = siblings.every((item) => item.status === "dispatched" || item.status === "failed");
+        if (allFinished) {
+          delete state.batches[task.batchId];
+        }
+      }
+
       await saveState(state);
       sendJson(res, 200, { ok: true });
       return;
