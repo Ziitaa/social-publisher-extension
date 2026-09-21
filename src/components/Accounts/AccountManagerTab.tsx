@@ -1,6 +1,7 @@
 import { Button, Card, CardBody, Chip, Input, Select, SelectItem } from "@heroui/react";
 import { Play, Plus, RefreshCw, Trash2, UsersRound } from "lucide-react";
 import type React from "react";
+import { listManagedAccounts, saveManagedAccounts } from "~accounts/pool";
 import { useEffect, useMemo, useState } from "react";
 import {
   deleteSessionAccount,
@@ -36,7 +37,25 @@ const AccountManagerTab: React.FC = () => {
     try {
       await getSessionManagerHealth();
       setOnline(true);
-      setAccounts(await listSessionAccounts());
+      let remoteAccounts = await listSessionAccounts();
+      if (remoteAccounts.length === 0) {
+        const legacyAccounts = await listManagedAccounts();
+        if (legacyAccounts.length > 0) {
+          for (const legacy of legacyAccounts) {
+            await upsertSessionAccount({
+              id: legacy.id,
+              platform: legacy.platform,
+              platformLabel: legacy.platformLabel,
+              label: legacy.label,
+              username: legacy.username || "",
+              status: legacy.status || "unknown",
+            });
+          }
+          await saveManagedAccounts([]);
+          remoteAccounts = await listSessionAccounts();
+        }
+      }
+      setAccounts(remoteAccounts);
     } catch {
       setOnline(false);
       setAccounts([]);
