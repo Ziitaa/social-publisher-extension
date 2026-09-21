@@ -71,7 +71,7 @@ const MatrixQueueTab: React.FC = () => {
       }
       setPlatforms(Array.from(unique.values()));
     } catch {
-      setMessage("Session Manager 未启动。请先去“账号池”启动本地服务。");
+      setMessage("本地发布服务未连接。正式安装后会随 Windows 自动启动。");
     }
   };
 
@@ -92,7 +92,10 @@ const MatrixQueueTab: React.FC = () => {
     setSelected((prev) => (checked ? [...new Set([...prev, id])] : prev.filter((item) => item !== id)));
   };
 
-  const selectAll = () => setSelected(accounts.map((account) => account.id));
+  const selectAll = () => {
+    const supportedKeys = new Set(platforms.map((item) => item.accountKey));
+    setSelected(accounts.filter((account) => supportedKeys.has(account.platform)).map((account) => account.id));
+  };
   const clearSelection = () => setSelected([]);
 
   const handleImages = async (files: FileList | null) => {
