@@ -222,7 +222,7 @@ const AccountManagerTab: React.FC = () => {
             </div>
           )}
 
-          <div className="grid gap-3 md:grid-cols-[180px_1fr_1fr_auto]">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[180px_1fr_1fr_180px_1fr_auto]">
             <Select
               label="平台"
               selectedKeys={[platform]}
@@ -246,6 +246,19 @@ const AccountManagerTab: React.FC = () => {
             </Select>
             <Input label="账号备注名" placeholder="例如：抖音001" value={label} onValueChange={setLabel} />
             <Input label="平台用户名（可选）" placeholder="@username / 昵称" value={username} onValueChange={setUsername} />
+            <Select
+              label="用途"
+              selectedKeys={[purpose]}
+              onSelectionChange={(keys) => {
+                const next = Array.from(keys)[0];
+                if (next) setPurpose(String(next) as typeof purpose);
+              }}>
+              <SelectItem key="recruitment">招聘</SelectItem>
+              <SelectItem key="product">产品推广</SelectItem>
+              <SelectItem key="b2b">经销商 / B2B</SelectItem>
+              <SelectItem key="general">通用</SelectItem>
+            </Select>
+            <Input label="负责人（可选）" placeholder="例如：行政 / Elaine" value={owner} onValueChange={setOwner} />
             <Button
               color="primary"
               className="self-end"
@@ -256,6 +269,66 @@ const AccountManagerTab: React.FC = () => {
             </Button>
           </div>
           {message && <div className="text-xs text-default-500">{message}</div>}
+
+          <div className="mt-2 border-t border-divider pt-4">
+            <div className="mb-3 text-sm font-medium">账号组</div>
+            <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
+              <Input label="新建账号组" placeholder="例如：招聘矩阵 / 产品推广矩阵 / 海外矩阵" value={groupName} onValueChange={setGroupName} />
+              <Button
+                className="self-end"
+                variant="flat"
+                isDisabled={!online || !groupName.trim() || groupAccountIds.length === 0}
+                onPress={async () => {
+                  await saveAccountGroup({
+                    name: groupName.trim(),
+                    accountIds: groupAccountIds,
+                  });
+                  setGroupName("");
+                  setGroupAccountIds([]);
+                  setMessage("账号组已保存，可在推广工作台一键选择。");
+                  await reload();
+                }}>
+                保存账号组（{groupAccountIds.length}）
+              </Button>
+            </div>
+
+            {accounts.length > 0 && (
+              <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {accounts.map((account) => (
+                  <label key={account.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-divider p-2">
+                    <Checkbox
+                      isSelected={groupAccountIds.includes(account.id)}
+                      onValueChange={(checked) =>
+                        setGroupAccountIds((prev) =>
+                          checked ? [...new Set([...prev, account.id])] : prev.filter((id) => id !== account.id),
+                        )
+                      }
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{account.label}</div>
+                      <div className="truncate text-xs text-default-500">{account.platformLabel}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {groups.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {groups.map((group) => (
+                  <Chip
+                    key={group.id}
+                    variant="flat"
+                    onClose={async () => {
+                      await deleteAccountGroup(group.id);
+                      await reload();
+                    }}>
+                    {group.name} · {group.accountIds.length}
+                  </Chip>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="mt-2 border-t border-divider pt-4">
             <div className="mb-2 text-sm font-medium">批量导入账号</div>
