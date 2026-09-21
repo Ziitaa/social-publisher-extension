@@ -52,14 +52,19 @@ const PublishHistoryTab: React.FC = () => {
             <History className="size-5" />
             <h3 className="text-lg font-semibold">发布记录</h3>
           </div>
-          <p className="text-sm text-default-500">按推广任务查看账号分发状态。当前“已派发”表示任务已交给平台适配器，不代表平台最终发布成功。</p>
+          <p className="text-sm text-default-500">按推广任务查看账号分发状态。“待人工确认”表示内容已交给平台页面但仍需要人工完成最终发布；自动模式也不等同于平台侧最终成功回执。</p>
           {message && <div className="text-sm text-danger">{message}</div>}
         </CardBody>
       </Card>
 
       {grouped.map(([name, items]) => {
         const queued = items.filter((item) => item.status === "queued").length;
-        const dispatched = items.filter((item) => item.status === "dispatched").length;
+        const manual = items.filter(
+          (item) => item.status === "dispatched" && item.platformInfo?.publishMode !== "auto",
+        ).length;
+        const autoDispatched = items.filter(
+          (item) => item.status === "dispatched" && item.platformInfo?.publishMode === "auto",
+        ).length;
         const failed = items.filter((item) => item.status === "failed").length;
         const newest = Math.max(...items.map((item) => item.createdAt));
         const campaignType = items[0]?.campaignType;
@@ -77,7 +82,8 @@ const PublishHistoryTab: React.FC = () => {
                 </div>
                 <div className="flex gap-2 text-xs">
                   <Chip size="sm" variant="flat" color="warning">排队 {queued}</Chip>
-                  <Chip size="sm" variant="flat" color="success">已派发 {dispatched}</Chip>
+                  <Chip size="sm" variant="flat" color="primary">待人工确认 {manual}</Chip>
+                  <Chip size="sm" variant="flat" color="success">自动派发 {autoDispatched}</Chip>
                   <Chip size="sm" variant="flat" color="danger">失败 {failed}</Chip>
                 </div>
               </div>
@@ -94,8 +100,22 @@ const PublishHistoryTab: React.FC = () => {
                       <Chip
                         size="sm"
                         variant="flat"
-                        color={task.status === "failed" ? "danger" : task.status === "dispatched" ? "success" : "warning"}>
-                        {task.status === "queued" ? "排队中" : task.status === "dispatched" ? "已派发" : "失败"}
+                        color={
+                          task.status === "failed"
+                            ? "danger"
+                            : task.status === "queued"
+                              ? "warning"
+                              : task.platformInfo?.publishMode === "auto"
+                                ? "success"
+                                : "primary"
+                        }>
+                        {task.status === "queued"
+                          ? "排队中"
+                          : task.status === "failed"
+                            ? "失败"
+                            : task.platformInfo?.publishMode === "auto"
+                              ? "自动派发"
+                              : "待人工确认"}
                       </Chip>
                     </div>
                   );
