@@ -1,6 +1,6 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -77,8 +77,35 @@ async function readJson(req, limitBytes = 512 * 1024 * 1024) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
+function findChromeRecursively(root) {
+  if (!root || !existsSync(root)) return null;
+  const stack = [root];
+  while (stack.length) {
+    const current = stack.pop();
+    let entries = [];
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(full);
+      } else if (entry.isFile() && entry.name.toLowerCase() === "chrome.exe") {
+        return full;
+      }
+    }
+  }
+  return null;
+}
+
 function findChrome() {
+  const sessionBrowser = findChromeRecursively(path.join(runtimeRoot, "browser"));
+  if (sessionBrowser) return sessionBrowser;
+
   const candidates = [
+    process.env.SOCIAL_PUBLISHER_CHROME,
     process.env.CHROME_PATH,
     path.join(process.env.PROGRAMFILES || "", "Google", "Chrome", "Application", "chrome.exe"),
     path.join(process.env["PROGRAMFILES(X86)"] || "", "Google", "Chrome", "Application", "chrome.exe"),
@@ -96,7 +123,7 @@ async function launchAccountSession(accountId) {
   const account = state.accounts.find((item) => item.id === accountId);
   if (!account) throw new Error("Account not found");
   const chrome = findChrome();
-  if (!chrome) throw new Error("Chrome executable not found");
+  if (!chrome) throw new Error("Session browser not found. Run prepare-session-browser.ps1 first.");
   if (!existsSync(extensionDir)) throw new Error(`Extension build not found: ${extensionDir}`);
 
   const sessionDir = sessionDirFor(accountId);
