@@ -1,9 +1,10 @@
-import { Button, Card, CardBody, Checkbox, Chip, Input, Select, SelectItem, Textarea } from "@heroui/react";
+import { Button, Card, CardBody, Checkbox, Chip, Input, Select, SelectItem } from "@heroui/react";
 import { Play, Plus, RefreshCw, Trash2, UsersRound } from "lucide-react";
 import { Icon } from "@iconify/react";
 import type React from "react";
 import { listManagedAccounts, saveManagedAccounts } from "~accounts/pool";
 import { useEffect, useMemo, useState } from "react";
+import { refreshAccountInfoMap } from "~sync/account";
 import { getPlatformInfos } from "~sync/common";
 import {
   deleteAccountGroup,
@@ -27,15 +28,13 @@ type PlatformOption = {
   homeUrl?: string;
 };
 
-
+const PLATFORM_PRIORITY = ["douyin", "rednote", "tiktok", "x", "bilibili", "qie", "chejiahao", "dewu"];
 
 const AccountManagerTab: React.FC = () => {
   const [accounts, setAccounts] = useState<SessionManagerAccount[]>([]);
   const [groups, setGroups] = useState<AccountGroup[]>([]);
   const [platform, setPlatform] = useState("douyin");
   const [platformOptions, setPlatformOptions] = useState<PlatformOption[]>([]);
-  const [label, setLabel] = useState("");
-  const [username, setUsername] = useState("");
   const [purpose, setPurpose] = useState<"recruitment" | "product" | "b2b" | "general">("recruitment");
   const [owner, setOwner] = useState("");
   const [groupName, setGroupName] = useState("");
@@ -43,7 +42,6 @@ const AccountManagerTab: React.FC = () => {
   const [online, setOnline] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
-  const [bulkText, setBulkText] = useState("");
 
   const reload = async () => {
     try {
@@ -79,8 +77,10 @@ const AccountManagerTab: React.FC = () => {
   useEffect(() => {
     getPlatformInfos()
       .then((infos) => {
+        const connectableKeys = new Set(Object.keys(refreshAccountInfoMap));
         const map = new Map<string, PlatformOption>();
         for (const info of infos) {
+          if (!connectableKeys.has(info.accountKey)) continue;
           const current = map.get(info.accountKey);
           map.set(info.accountKey, {
             key: info.accountKey,
@@ -88,10 +88,19 @@ const AccountManagerTab: React.FC = () => {
             iconifyIcon: current?.iconifyIcon || info.iconifyIcon,
             faviconUrl: current?.faviconUrl || info.faviconUrl,
             tags: Array.from(new Set([...(current?.tags || []), ...(info.tags || [])])),
-            homeUrl: current?.homeUrl || info.homeUrl,
+            homeUrl: refreshAccountInfoMap[info.accountKey]?.homeUrl || current?.homeUrl || info.homeUrl,
           });
         }
-        const options = Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label, "zh-CN"));
+        const options = Array.from(map.values()).sort((a, b) => {
+          const ai = PLATFORM_PRIORITY.indexOf(a.key);
+          const bi = PLATFORM_PRIORITY.indexOf(b.key);
+          if (ai !== -1 || bi !== -1) {
+            if (ai === -1) return 1;
+            if (bi === -1) return -1;
+            return ai - bi;
+          }
+          return a.label.localeCompare(b.label, "zh-CN");
+        });
         setPlatformOptions(options);
         if (options.length && !options.some((item) => item.key === platform)) {
           setPlatform(options[0].key);
@@ -114,85 +123,40 @@ const AccountManagerTab: React.FC = () => {
     return [...map.entries()];
   }, [accounts]);
 
-  const handleAdd = async () => {
-    const trimmed = label.trim();
-    if (!trimmed || !online) return;
-    const platformLabel = platformOptions.find((item) => item.key === platform)?.label || platform;
+  const selectedPlatform = platformOptions.find((item) => item.key === platform);
+
+  const handleConnect = async () => {
+    if (!online || !selectedPlatform) return;
+    const id = crypto.randomUUID();
     setBusy(true);
     try {
       await upsertSessionAccount({
-        id: crypto.randomUUID(),
-        platform,
-        platformLabel,
-        label: trimmed,
-        username: username.trim(),
+        id,
+        platform: selectedPlatform.key,
+        platformLabel: selectedPlatform.label,
+        label: `待识别的${selectedPlatform.label}账号`,
+        username: "",
         purpose,
         owner: owner.trim(),
-        status: "unknown",
-        homeUrl: platformOptions.find((item) => item.key === platform)?.homeUrl,
+        status: "pending_login",
+        homeUrl: selectedPlatform.homeUrl,
       });
-      setLabel("");
-      setUsername("");
-      setOwner("");
-      setMessage("账号已加入账号矩阵。下一步打开账号并完成首次登录。");
+      await launchSessionAccount(id);
+      setMessage(`已打开 ${selectedPlatform.label} 登录窗口。请扫码或登录，成功后系统会自动识别账号并保存。`);
       await reload();
+    } catch (error) {
+      await deleteSessionAccount(id).catch(() => undefined);
+      setMessage(String(error instanceof Error ? error.message : error));
     } finally {
       setBusy(false);
     }
   };
 
-  const handleBulkImport = async () => {
-    if (!online) return;
-    const lines = bulkText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-    if (!lines.length) return;
-
-    const keyByLabel = new Map<string, string>();
-    for (const item of platformOptions) {
-      keyByLabel.set(item.key.toLowerCase(), item.key);
-      keyByLabel.set(item.label.toLowerCase(), item.key);
-    }
-
-    setBusy(true);
-    let imported = 0;
-    const skipped: string[] = [];
-    try {
-      for (const line of lines) {
-        const parts = line.split(/[\t,，]/).map((part) => part.trim());
-        const rawPlatform = (parts[0] || "").toLowerCase();
-        const accountLabel = parts[1] || "";
-        const accountUsername = parts[2] || "";
-        const platformKey = keyByLabel.get(rawPlatform);
-        if (!platformKey || !accountLabel) {
-          skipped.push(line);
-          continue;
-        }
-        const platformLabel = platformOptions.find((item) => item.key === platformKey)?.label || platformKey;
-        await upsertSessionAccount({
-          id: crypto.randomUUID(),
-          platform: platformKey,
-          platformLabel,
-          label: accountLabel,
-          username: accountUsername,
-          status: "unknown",
-          homeUrl: platformOptions.find((item) => item.key === platformKey)?.homeUrl,
-        });
-        imported += 1;
-      }
-      setBulkText("");
-      setMessage(`已批量导入 ${imported} 个账号。${skipped.length ? ` 跳过 ${skipped.length} 行格式错误数据。` : ""}`);
-      await reload();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const statusChip = (status?: string) => {
-    if (status === "ready") return <Chip size="sm" color="success" variant="flat">可使用</Chip>;
-    if (status === "starting") return <Chip size="sm" color="warning" variant="flat">打开中</Chip>;
-    return <Chip size="sm" variant="flat">需登录</Chip>;
+  const statusChip = (account: SessionManagerAccount) => {
+    if (account.sessionStatus === "ready") return <Chip size="sm" color="success" variant="flat">可使用</Chip>;
+    if (account.sessionStatus === "starting") return <Chip size="sm" color="warning" variant="flat">等待登录</Chip>;
+    if (account.status === "connected") return <Chip size="sm" color="success" variant="flat">已绑定</Chip>;
+    return <Chip size="sm" variant="flat">待登录</Chip>;
   };
 
   return (
@@ -202,9 +166,7 @@ const AccountManagerTab: React.FC = () => {
           <div className="flex items-start justify-between gap-4">
             <div>
               <h3 className="text-lg font-semibold">账号矩阵</h3>
-              <p className="text-sm text-default-500">
-                集中管理各平台账号、用途、负责人和账号组。首次使用某个账号时完成一次登录，之后会保留登录状态。
-              </p>
+              <p className="text-sm text-default-500">选择平台并完成一次登录。系统会自动识别账号，之后保留独立登录状态。</p>
             </div>
             <div className="flex items-center gap-2">
               <Chip color={online ? "success" : "danger"} variant="flat" size="sm">
@@ -222,7 +184,7 @@ const AccountManagerTab: React.FC = () => {
             </div>
           )}
 
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[180px_1fr_1fr_180px_1fr_auto]">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[220px_180px_1fr_auto]">
             <Select
               label="平台"
               selectedKeys={[platform]}
@@ -234,18 +196,18 @@ const AccountManagerTab: React.FC = () => {
                 <SelectItem
                   key={item.key}
                   startContent={
-                    item.iconifyIcon ? (
-                      <Icon icon={item.iconifyIcon} className="size-4" />
-                    ) : item.faviconUrl ? (
-                      <img src={item.faviconUrl} alt="" className="size-4 rounded-sm" />
-                    ) : undefined
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden">
+                      {item.iconifyIcon ? (
+                        <Icon icon={item.iconifyIcon} className="h-3.5 w-3.5 shrink-0" />
+                      ) : item.faviconUrl ? (
+                        <img src={item.faviconUrl} alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
+                      ) : null}
+                    </span>
                   }>
                   {item.label}
                 </SelectItem>
               ))}
             </Select>
-            <Input label="账号备注名" placeholder="例如：抖音001" value={label} onValueChange={setLabel} />
-            <Input label="平台用户名（可选）" placeholder="@username / 昵称" value={username} onValueChange={setUsername} />
             <Select
               label="用途"
               selectedKeys={[purpose]}
@@ -258,22 +220,23 @@ const AccountManagerTab: React.FC = () => {
               <SelectItem key="b2b">经销商 / B2B</SelectItem>
               <SelectItem key="general">通用</SelectItem>
             </Select>
-            <Input label="负责人（可选）" placeholder="例如：行政 / Elaine" value={owner} onValueChange={setOwner} />
+            <Input label="负责人（可选）" value={owner} onValueChange={setOwner} />
             <Button
               color="primary"
               className="self-end"
-              isDisabled={!online || busy}
+              isDisabled={!online || busy || !selectedPlatform}
               startContent={<Plus className="size-4" />}
-              onPress={handleAdd}>
-              添加
+              onPress={handleConnect}>
+              接入账号
             </Button>
           </div>
-          {message && <div className="text-xs text-default-500">{message}</div>}
+          <div className="text-xs text-default-500">接入时会打开独立浏览器窗口。扫码或登录成功后，账号昵称会自动回填。</div>
+          {message && <div className="text-xs text-default-600">{message}</div>}
 
           <div className="mt-2 border-t border-divider pt-4">
             <div className="mb-3 text-sm font-medium">账号组</div>
             <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-              <Input label="新建账号组" placeholder="例如：招聘矩阵 / 产品推广矩阵 / 海外矩阵" value={groupName} onValueChange={setGroupName} />
+              <Input label="新建账号组" value={groupName} onValueChange={setGroupName} />
               <Button
                 className="self-end"
                 variant="flat"
@@ -329,22 +292,6 @@ const AccountManagerTab: React.FC = () => {
               </div>
             )}
           </div>
-
-          <div className="mt-2 border-t border-divider pt-4">
-            <div className="mb-2 text-sm font-medium">批量导入账号</div>
-            <div className="mb-2 text-xs text-default-500">
-              支持全部已适配平台。每行：平台,账号备注名,平台用户名（用户名可留空）。例如：抖音,抖音001,@user01
-            </div>
-            <Textarea
-              value={bulkText}
-              onValueChange={setBulkText}
-              minRows={4}
-              placeholder={"抖音,抖音001,@user01\n抖音,抖音002,@user02\n小红书,小红书001,昵称"}
-            />
-            <Button className="mt-2" variant="flat" isDisabled={!online || busy || !bulkText.trim()} onPress={handleBulkImport}>
-              批量导入
-            </Button>
-          </div>
         </CardBody>
       </Card>
 
@@ -354,7 +301,7 @@ const AccountManagerTab: React.FC = () => {
             <UsersRound className="size-8 text-default-400" />
             <div className="font-medium">{online ? "还没有账号" : "等待 Session Manager"}</div>
             <div className="text-sm text-default-500">
-              {online ? "先把你要管理的平台账号录进来，再逐个绑定独立会话。" : "启动后账号池会自动连接本地服务。"}
+              {online ? "选择一个平台并接入账号，完成扫码后会自动加入账号矩阵。" : "启动后账号池会自动连接本地服务。"}
             </div>
           </CardBody>
         </Card>
@@ -372,11 +319,9 @@ const AccountManagerTab: React.FC = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <div className="font-medium">{account.label}</div>
-                        {statusChip(account.sessionStatus)}
+                        {statusChip(account)}
                       </div>
-                      <div className="mt-1 text-xs text-default-500">
-                        {account.username || "未填写用户名"} · {account.id.slice(0, 8)}
-                      </div>
+                      <div className="mt-1 text-xs text-default-500">{account.username || "等待自动识别账号"}</div>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -389,13 +334,13 @@ const AccountManagerTab: React.FC = () => {
                           setMessage(`正在打开 ${account.label}…`);
                           try {
                             await launchSessionAccount(account.id);
-                            setMessage("账号窗口已打开。第一次使用请完成平台登录，以后会保留登录状态。");
+                            setMessage(account.status === "connected" ? "账号窗口已打开。" : "请在账号窗口完成扫码或登录，系统会自动识别账号。" );
                             await reload();
                           } catch (error) {
                             setMessage(String(error instanceof Error ? error.message : error));
                           }
                         }}>
-                        {account.sessionStatus === "ready" ? "打开账号" : "登录账号"}
+                        {account.status === "connected" ? "打开账号" : "继续登录"}
                       </Button>
 
                       <Button
