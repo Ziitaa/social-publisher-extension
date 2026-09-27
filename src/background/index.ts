@@ -1,5 +1,5 @@
 import { Storage } from "@plasmohq/storage";
-import { getAllAccountInfo } from "~sync/account";
+import { getAllAccountInfo, refreshAccountInfo } from "~sync/account";
 import {
   // injectScriptsToTabs,
   type SyncData,
@@ -61,7 +61,9 @@ let currentSyncData: SyncData | null = null;
 let currentPublishPopup: chrome.windows.Window | null = null;
 
 const SESSION_MANAGER_BASE_URL = "http://127.0.0.1:2663";
+const MATRIX_ACCOUNT_REVERIFY_MS = 5 * 60 * 1000;
 let matrixTaskBusy = false;
+let matrixAccountVerifiedAt = 0;
 
 async function sendMatrixReceipt(taskId: string, body: Record<string, unknown>) {
   await fetch(`${SESSION_MANAGER_BASE_URL}/api/tasks/${encodeURIComponent(taskId)}/receipt`, {
@@ -71,19 +73,59 @@ async function sendMatrixReceipt(taskId: string, body: Record<string, unknown>) 
   });
 }
 
-async function heartbeatMatrixSession() {
+async function ensureMatrixSessionReady(): Promise<string | null> {
   const accountId = await storage.get<string>("matrixSessionAccountId");
-  if (!accountId) return;
-  await fetch(`${SESSION_MANAGER_BASE_URL}/api/sessions/${encodeURIComponent(accountId)}/ready`, {
+  if (!accountId) return null;
+
+  const accountResponse = await fetch(`${SESSION_MANAGER_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}`, {
+    cache: "no-store",
+  }).catch(() => null);
+  if (!accountResponse?.ok) return null;
+
+  const account = await accountResponse.json();
+  const now = Date.now();
+  const shouldVerify = account.status !== "connected" || !matrixAccountVerifiedAt || now - matrixAccountVerifiedAt >= MATRIX_ACCOUNT_REVERIFY_MS;
+
+  if (shouldVerify) {
+    const info = await refreshAccountInfo(account.platform).catch(() => null);
+    if (!info?.username) return null;
+
+    const updateResponse = await fetch(`${SESSION_MANAGER_BASE_URL}/api/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: account.id,
+        platform: account.platform,
+        platformLabel: account.platformLabel,
+        label: info.username,
+        username: info.username,
+        purpose: account.purpose,
+        owner: account.owner,
+        status: "connected",
+        homeUrl: account.homeUrl,
+      }),
+    }).catch(() => null);
+    if (!updateResponse?.ok) return null;
+    matrixAccountVerifiedAt = now;
+  }
+
+  const readyResponse = await fetch(`${SESSION_MANAGER_BASE_URL}/api/sessions/${encodeURIComponent(accountId)}/ready`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
-  }).catch(() => undefined);
+  }).catch(() => null);
+  if (!readyResponse?.ok) return null;
+
+  return accountId;
+}
+
+async function heartbeatMatrixSession() {
+  await ensureMatrixSessionReady().catch(() => undefined);
 }
 
 async function pollMatrixTaskQueue() {
   if (matrixTaskBusy) return;
-  const accountId = await storage.get<string>("matrixSessionAccountId");
+  const accountId = await ensureMatrixSessionReady().catch(() => null);
   if (!accountId) return;
 
   matrixTaskBusy = true;
