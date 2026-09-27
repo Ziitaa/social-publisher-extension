@@ -13,19 +13,13 @@ const App: React.FC = () => {
       <main className="min-h-screen bg-background text-foreground">
         <header className="sticky top-0 z-20 border-b border-divider bg-background/95 backdrop-blur">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-            <div>
-              <div className="text-xl font-semibold">Social Publisher</div>
-              <div className="text-xs text-default-500">招聘 · 产品 · 经销商/B2B 矩阵推广工作台</div>
-            </div>
-            <div className="rounded-full bg-warning-100 px-3 py-1 text-xs text-warning-700">
-              Safe Publish
-            </div>
+            <div className="text-xl font-semibold">Social Publisher</div>
+            <div className="rounded-full bg-warning-100 px-3 py-1 text-xs text-warning-700">Safe Publish</div>
           </div>
         </header>
 
         <section className="mx-auto max-w-7xl px-6 py-6">
           <Tabs aria-label="Social Publisher" variant="underlined" color="primary" defaultSelectedKey="queue">
-
             <Tab
               key="queue"
               title={
