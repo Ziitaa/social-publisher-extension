@@ -9,55 +9,80 @@ internal static class Program
 {
     private const string ExtensionId = "clbmikkopbocinhhmckloddbepkmccce";
     private const string HealthUrl = "http://127.0.0.1:2663/api/health";
+    private const string LauncherMutexName = "SocialPublisherDesktopLauncher";
 
     [STAThread]
     private static void Main()
     {
-        try
+        bool ownsMutex = false;
+        using (Mutex mutex = new Mutex(false, LauncherMutexName))
         {
-            string exeDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
-            DirectoryInfo parent = Directory.GetParent(exeDir);
-            string repoRoot = parent != null ? parent.FullName : exeDir;
-            string extensionDir = Path.Combine(repoRoot, "build", "chrome-mv3-prod");
-            string browserRoot = Path.Combine(repoRoot, ".social-publisher", "browser");
-            string controlProfile = Path.Combine(repoRoot, ".social-publisher", "control-profile");
-            string runService = Path.Combine(repoRoot, "run-session-manager.ps1");
-
-            if (!Directory.Exists(extensionDir))
+            try
             {
-                ShowError("Social Publisher 还没有构建完成。请先运行一次安装脚本。");
-                return;
+                try
+                {
+                    ownsMutex = mutex.WaitOne(0, false);
+                }
+                catch (AbandonedMutexException)
+                {
+                    ownsMutex = true;
+                }
+
+                if (!ownsMutex) return;
+
+                string exeDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+                DirectoryInfo parent = Directory.GetParent(exeDir);
+                string repoRoot = parent != null ? parent.FullName : exeDir;
+                string extensionDir = Path.Combine(repoRoot, "build", "chrome-mv3-prod");
+                string browserRoot = Path.Combine(repoRoot, ".social-publisher", "browser");
+                string controlProfile = Path.Combine(repoRoot, ".social-publisher", "control-profile");
+                string runService = Path.Combine(repoRoot, "run-session-manager.ps1");
+
+                if (!Directory.Exists(extensionDir))
+                {
+                    ShowError("Social Publisher 还没有构建完成。请先运行一次安装脚本。");
+                    return;
+                }
+
+                string chrome = FindChrome(browserRoot);
+                if (string.IsNullOrEmpty(chrome))
+                {
+                    ShowError("没有找到 Social Publisher 专用浏览器。请先运行一次安装脚本。");
+                    return;
+                }
+
+                EnsureService(runService);
+                Directory.CreateDirectory(controlProfile);
+
+                string optionsUrl = "chrome-extension://" + ExtensionId + "/options.html";
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = chrome;
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.Arguments = string.Join(" ", new string[]
+                {
+                    Quote("--user-data-dir=" + controlProfile),
+                    Quote("--load-extension=" + extensionDir),
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--disable-session-crashed-bubble",
+                    "--disable-background-mode",
+                    Quote("--app=" + optionsUrl)
+                });
+
+                Process.Start(psi);
             }
-
-            string chrome = FindChrome(browserRoot);
-            if (string.IsNullOrEmpty(chrome))
+            catch (Exception ex)
             {
-                ShowError("没有找到 Social Publisher 专用浏览器。请先运行一次安装脚本。");
-                return;
+                ShowError("Social Publisher 启动失败：\n" + ex.Message);
             }
-
-            EnsureService(runService);
-            Directory.CreateDirectory(controlProfile);
-
-            string optionsUrl = "chrome-extension://" + ExtensionId + "/options.html";
-            ProcessStartInfo psi = new ProcessStartInfo();
-            psi.FileName = chrome;
-            psi.UseShellExecute = false;
-            psi.CreateNoWindow = true;
-            psi.Arguments = string.Join(" ", new string[]
+            finally
             {
-                Quote("--user-data-dir=" + controlProfile),
-                Quote("--load-extension=" + extensionDir),
-                "--no-first-run",
-                "--no-default-browser-check",
-                Quote("--app=" + optionsUrl)
-            });
-
-            Process.Start(psi);
-        }
-        catch (Exception ex)
-        {
-            ShowError("Social Publisher 启动失败：\n" + ex.Message);
+                if (ownsMutex)
+                {
+                    try { mutex.ReleaseMutex(); } catch { }
+                }
+            }
         }
     }
 
