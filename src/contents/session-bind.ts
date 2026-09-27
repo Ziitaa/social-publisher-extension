@@ -14,17 +14,12 @@ async function bindSession() {
   if (!accountId) return;
 
   await storage.set("matrixSessionAccountId", accountId);
-  await fetch(`http://127.0.0.1:2663/api/sessions/${encodeURIComponent(accountId)}/ready`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: "{}",
-  }).catch(() => undefined);
 
   const markerId = "social-publisher-bind-status";
   if (!document.getElementById(markerId)) {
     const marker = document.createElement("div");
     marker.id = markerId;
-    marker.textContent = "Social Publisher 会话已绑定。请在此浏览器窗口中登录对应平台账号，然后保持此窗口环境供任务使用。";
+    marker.textContent = "Social Publisher 已创建独立账号会话。请在即将打开的平台页面完成扫码或登录，成功后系统会自动识别并保存账号。";
     marker.style.cssText =
       "position:fixed;left:24px;right:24px;bottom:24px;z-index:2147483647;padding:14px 16px;border-radius:12px;background:#111;color:#fff;font:14px system-ui;box-shadow:0 8px 30px #0003";
     document.documentElement.appendChild(marker);
