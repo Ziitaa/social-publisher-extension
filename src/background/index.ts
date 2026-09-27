@@ -30,11 +30,8 @@ async function initLocalSecurityState() {
   await storage.remove("extensionClientId");
 }
 
-chrome.runtime.onInstalled.addListener((object) => {
-  if (object.reason === chrome.runtime.OnInstalledReason.INSTALL) {
-    chrome.runtime.openOptionsPage();
-  }
-  initLocalSecurityState();
+chrome.runtime.onInstalled.addListener(() => {
+  void initLocalSecurityState();
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 });
 
