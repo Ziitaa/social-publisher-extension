@@ -14,6 +14,7 @@ async function bindSession() {
   if (!accountId) return;
 
   await storage.set("matrixSessionAccountId", accountId);
+  await chrome.runtime.sendMessage({ action: "MATRIX_SESSION_BOUND", accountId }).catch(() => undefined);
 
   const account = await fetch(`http://127.0.0.1:2663/api/accounts/${encodeURIComponent(accountId)}`)
     .then((response) => (response.ok ? response.json() : null))
