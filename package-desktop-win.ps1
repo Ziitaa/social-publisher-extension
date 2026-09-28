@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $repoRoot
 
-Write-Host "== Packaging Social Publisher Desktop =="
+Write-Host "== Packaging Matrix Publish Desktop =="
 
 pnpm.cmd install
 pnpm.cmd build
@@ -15,7 +15,7 @@ if (-not $browserExe) {
 }
 
 $node = (Get-Command node.exe -ErrorAction Stop).Source
-$outRoot = Join-Path $repoRoot "dist\Social-Publisher-Desktop"
+$outRoot = Join-Path $repoRoot "dist\Matrix-Publish-Admin-Windows"
 
 if (Test-Path $outRoot) {
   Remove-Item $outRoot -Recurse -Force
@@ -41,17 +41,17 @@ $installLines = @(
   '$exe = Join-Path $root "dist\SocialPublisher.exe"',
   '$desktop = [Environment]::GetFolderPath("Desktop")',
   '$wsh = New-Object -ComObject WScript.Shell',
-  '$shortcut = $wsh.CreateShortcut((Join-Path $desktop "Social Publisher.lnk"))',
+  '$shortcut = $wsh.CreateShortcut((Join-Path $desktop "矩阵发布工作台.lnk"))',
   '$shortcut.TargetPath = $exe',
   '$shortcut.WorkingDirectory = $root',
-  '$shortcut.Description = "Social Publisher"',
+  '$shortcut.Description = "矩阵发布工作台"',
   '$shortcut.Save()',
   '$startupDir = [Environment]::GetFolderPath("Startup")',
-  '$service = $wsh.CreateShortcut((Join-Path $startupDir "Social Publisher Service.lnk"))',
+  '$service = $wsh.CreateShortcut((Join-Path $startupDir "Matrix Publish Service.lnk"))',
   '$service.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"',
   '$service.Arguments = ''-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "'' + $root + ''\run-session-manager.ps1"''',
   '$service.WorkingDirectory = $root',
-  '$service.Description = "Social Publisher local service"',
+  '$service.Description = "矩阵发布工作台本地服务"',
   '$service.Save()',
   'try { Invoke-RestMethod -Uri "http://127.0.0.1:2663/api/health" -TimeoutSec 1 | Out-Null } catch {',
   '  Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @("-NoProfile","-ExecutionPolicy","Bypass","-File",(Join-Path $root "run-session-manager.ps1"))',
@@ -59,7 +59,7 @@ $installLines = @(
   '}',
   'Start-Process $exe'
 )
-$installLines | Set-Content (Join-Path $outRoot "Install.ps1") -Encoding ASCII
+$installLines | Set-Content (Join-Path $outRoot "Install.ps1") -Encoding UTF8
 
 $cmdLines = @(
   '@echo off',
@@ -69,22 +69,22 @@ $cmdLines = @(
 $cmdLines | Set-Content (Join-Path $outRoot "Install.cmd") -Encoding ASCII
 
 $readmeLines = @(
-  'Social Publisher Desktop',
+  '矩阵发布工作台',
   '',
-  'First-time setup:',
-  '1. Extract the whole folder to a fixed location.',
-  '2. Double-click Install.cmd.',
-  '3. A Social Publisher shortcut will be created on the Desktop.',
-  '4. After that, use the Desktop shortcut.',
+  '首次使用：',
+  '1. 将整个文件夹解压到固定位置，不要只单独复制其中某个文件。',
+  '2. 双击 Install.cmd。',
+  '3. 桌面会自动创建“矩阵发布工作台”快捷方式。',
+  '4. 以后直接双击桌面快捷方式使用。',
   '',
-  'No Google/Gmail account is required.',
-  'No Chrome developer mode is required.',
-  'No manual browser-extension installation is required.',
-  'Platform accounts still need to be signed in once when first bound.'
+  '不需要 Google/Gmail 账号。',
+  '不需要 Chrome 开发者模式。',
+  '不需要手动安装浏览器扩展。',
+  '各平台账号首次接入时仍需本人扫码或完成平台登录。'
 )
-$readmeLines | Set-Content (Join-Path $outRoot "README.txt") -Encoding ASCII
+$readmeLines | Set-Content (Join-Path $outRoot "使用说明.txt") -Encoding UTF8
 
-$zipPath = Join-Path $repoRoot "dist\Social-Publisher-Desktop.zip"
+$zipPath = Join-Path $repoRoot "dist\Matrix-Publish-Admin-Windows.zip"
 if (Test-Path $zipPath) {
   Remove-Item $zipPath -Force
 }
@@ -92,5 +92,5 @@ if (Test-Path $zipPath) {
 Compress-Archive -Path (Join-Path $outRoot "*") -DestinationPath $zipPath -Force
 
 Write-Host ""
-Write-Host "Desktop package ready:"
+Write-Host "Admin desktop package ready:"
 Write-Host $zipPath
