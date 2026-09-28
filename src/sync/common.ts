@@ -13,7 +13,7 @@ export interface SyncDataPlatform {
   publishMode?: PublishMode;
   extraConfig?:
     | {
-        customInjectUrls?: string[]; // Beta 功能，用于自定义注入 URL
+        customInjectUrls?: string[];
       }
     | unknown;
 }
@@ -22,7 +22,7 @@ export interface SyncData {
   platforms: SyncDataPlatform[];
   isAutoPublish: boolean;
   data: DynamicData | ArticleData | VideoData | PodcastData;
-  origin?: DynamicData | ArticleData | VideoData | PodcastData; // Beta 功能，用于临时存储，发布时不需要提供该字段
+  origin?: DynamicData | ArticleData | VideoData | PodcastData;
 }
 
 export interface DynamicData {
@@ -56,10 +56,10 @@ export interface ArticleData {
   cover: FileData;
   htmlContent: string;
   markdownContent: string;
-  images?: FileData[]; // 发布时可不提供该字段
+  images?: FileData[];
   tags?: string[];
-  category?: string | number; // 平台分类 ID 或名称
-  original?: boolean; // 原创声明
+  category?: string | number;
+  original?: boolean;
   allowComment?: boolean;
   wordFileData?: FileData;
   scheduledPublishTime?: number;
@@ -73,12 +73,12 @@ export interface VideoData {
   cover?: FileData;
   verticalCover?: FileData;
   horizontalCover?: FileData;
-  videoFile?: File; // 原始 File 对象，用于避免 blob URL 问题
+  videoFile?: File;
   scheduledPublishTime?: number;
-  category?: string | number; // 平台分区 ID（如 B 站 tid，YouTube category）
-  original?: boolean; // 原创声明
-  collectionId?: string | number; // 合集/系列 ID（如 B 站 list_id）
-  description?: string; // 描述（独立于 content/简介）
+  category?: string | number;
+  original?: boolean;
+  collectionId?: string | number;
+  description?: string;
 }
 
 export interface PlatformInfo {
@@ -104,6 +104,40 @@ export interface AccountInfo {
   profileUrl?: string;
   avatarUrl?: string;
   extraData: unknown;
+}
+
+const BRAND_ICON_BY_ACCOUNT_KEY: Record<string, string> = {
+  douyin: "simple-icons:tiktok",
+  rednote: "simple-icons:xiaohongshu",
+  tiktok: "simple-icons:tiktok",
+  x: "simple-icons:x",
+  bilibili: "ant-design:bilibili-outlined",
+  weixinchannel: "simple-icons:wechat",
+  weixin: "simple-icons:wechat",
+  weibo: "simple-icons:sinaweibo",
+  kuaishou: "simple-icons:kuaishou",
+  zhihu: "simple-icons:zhihu",
+  toutiao: "simple-icons:toutiao",
+  toutiaohao: "simple-icons:toutiao",
+  baijiahao: "simple-icons:baidu",
+  instagram: "simple-icons:instagram",
+  facebook: "simple-icons:facebook",
+  linkedin: "simple-icons:linkedin",
+  youtube: "simple-icons:youtube",
+  pinterest: "simple-icons:pinterest",
+  threads: "simple-icons:threads",
+  reddit: "simple-icons:reddit",
+  bluesky: "simple-icons:bluesky",
+  substack: "simple-icons:substack",
+  qie: "simple-icons:tencentqq",
+  webhook: "mdi:webhook",
+};
+
+function normalizePlatformVisual(info: PlatformInfo): PlatformInfo {
+  return {
+    ...info,
+    iconifyIcon: BRAND_ICON_BY_ACCOUNT_KEY[info.accountKey] || info.iconifyIcon,
+  };
 }
 
 export const infoMap: Record<string, PlatformInfo> = {
@@ -134,26 +168,27 @@ export function getPlatformSyncData(data: SyncData, platform: SyncDataPlatform):
 export async function getPlatformInfo(platform: string): Promise<PlatformInfo | null> {
   const platformInfo = infoMap[platform];
   if (platformInfo) {
-    return await getExtraConfigFromPlatformInfo(await getAccountInfoFromPlatformInfo(platformInfo));
+    return normalizePlatformVisual(await getExtraConfigFromPlatformInfo(await getAccountInfoFromPlatformInfo(platformInfo)));
   }
   return null;
 }
 
 export function getRawPlatformInfo(platform: string): PlatformInfo | null {
-  return infoMap[platform];
+  const info = infoMap[platform];
+  return info ? normalizePlatformVisual(info) : null;
 }
 
 export async function getPlatformInfos(type?: "DYNAMIC" | "VIDEO" | "ARTICLE" | "PODCAST"): Promise<PlatformInfo[]> {
   const platformInfos: PlatformInfo[] = [];
   for (const info of Object.values(infoMap)) {
     if (type && info.type !== type) continue;
-    platformInfos.push(info);
+    platformInfos.push(normalizePlatformVisual(info));
   }
 
-  return await getExtraConfigFromPlatformInfos(await getAccountInfoFromPlatformInfos(platformInfos));
+  const hydrated = await getExtraConfigFromPlatformInfos(await getAccountInfoFromPlatformInfos(platformInfos));
+  return hydrated.map(normalizePlatformVisual);
 }
 
-// Inject || 注入 || START
 export async function createTabsForPlatforms(data: SyncData) {
   const tabs: { tab: chrome.tabs.Tab; platformInfo: SyncDataPlatform }[] = [];
   let groupId: number | undefined;
@@ -166,7 +201,6 @@ export async function createTabsForPlatforms(data: SyncData) {
         for (const url of extraConfig.customInjectUrls) {
           tab = await chrome.tabs.create({ url });
           info.injectUrl = url;
-          // 等待标签页加载完成
           await new Promise<void>((resolve) => {
             chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
               if (tabId === tab!.id && info.status === "complete") {
@@ -185,7 +219,6 @@ export async function createTabsForPlatforms(data: SyncData) {
             tab = await chrome.tabs.create({ url: platformInfo.injectUrl });
           }
         }
-        // 等待标签页加载完成
         if (tab) {
           await injectScriptsToTabs([{ tab, platformInfo: info }], data);
           await chrome.tabs.update(tab.id!, { active: true });
@@ -194,18 +227,15 @@ export async function createTabsForPlatforms(data: SyncData) {
             platformInfo: info,
           });
 
-          // 如果是第一个标签页，创建一个新组
           if (!groupId) {
             groupId = await chrome.tabs.group({ tabIds: [tab.id!] });
             await chrome.tabGroups.update(groupId, {
               color: "blue",
-              title: `Social Publisher-${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`,
+              title: `矩阵发布-${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`,
             });
           } else {
-            // 将新标签页添加到现有组中
             await chrome.tabs.group({ tabIds: [tab.id!], groupId });
           }
-          // 等待3秒再继续
           await new Promise<void>((resolve) => {
             chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
               if (tabId === tab!.id && info.status === "complete") {
@@ -248,4 +278,3 @@ export async function injectScriptsToTabs(
     }
   }
 }
-// Inject || 注入 || END
