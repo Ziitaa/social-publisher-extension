@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - safe-publish-v0
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Check Session Manager syntax
+        run: node --check session-manager/server.mjs
+      - name: Build extension
+        run: pnpm build
+
+  windows-launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile desktop launcher
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Add-Type -Path ".\desktop\SocialPublisherLauncher.cs" -ReferencedAssemblies @("System.Net.Http.dll") -OutputAssembly ".\dist\SocialPublisher.exe" -OutputType WindowsApplication
+          if (-not (Test-Path ".\dist\SocialPublisher.exe")) { throw "Launcher build failed" }

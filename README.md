@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **Social Publisher standalone fork:** the `safe-publish-v0` branch replaces the upstream SaaS entry points with a local extension workspace. MultiPost SaaS login, credits, API key linking, background ping, and `multipost.app` launch flows are not required for the local publishing workflow. Upstream platform adapters and Apache-2.0 attribution are retained.
+
 <div align="center">
 <img src="https://github.com/user-attachments/assets/b30c6c81-9c8b-4c78-a2df-9266b84b6f14" width="200" height="200" alt="MultiPost Logo" />
 

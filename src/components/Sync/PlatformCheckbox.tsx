@@ -1,6 +1,6 @@
-import { Checkbox, Image, Link } from "@heroui/react";
+import { Button, Checkbox, Image, Link } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import type { PlatformInfo, SyncData } from "~sync/common";
+import { isForcedFillPlatform, type PlatformInfo, type PublishMode, type SyncData } from "~sync/common";
 import ExtraInfoConfig from "./ExtraInfoConfig";
 
 interface PlatformCheckboxProps {
@@ -9,6 +9,8 @@ interface PlatformCheckboxProps {
   isDisabled?: boolean;
   onChange: (key: string, isSelected: boolean) => void;
   syncData?: SyncData;
+  publishMode?: PublishMode;
+  onPublishModeChange?: (mode: PublishMode) => void;
 }
 
 export default function PlatformCheckbox({
@@ -17,8 +19,12 @@ export default function PlatformCheckbox({
   isDisabled,
   onChange,
   syncData,
+  publishMode = "fill",
+  onPublishModeChange,
 }: PlatformCheckboxProps) {
   const profileUrl = platformInfo.accountInfo?.profileUrl || platformInfo.homeUrl;
+  const forcedFill = isForcedFillPlatform(platformInfo.name);
+  const effectiveMode: PublishMode = forcedFill ? "fill" : publishMode;
 
   return (
     <div className="flex items-center p-2 transition-colors rounded-lg hover:bg-default-100">
@@ -75,6 +81,18 @@ export default function PlatformCheckbox({
           </div>
         </div>
       </div>
+
+      {isSelected && onPublishModeChange && (
+        <Button
+          size="sm"
+          variant="flat"
+          color={effectiveMode === "auto" ? "success" : "warning"}
+          isDisabled={forcedFill}
+          onPress={() => onPublishModeChange(effectiveMode === "auto" ? "fill" : "auto")}
+          className="ml-2 min-w-20">
+          {forcedFill ? "仅填充" : effectiveMode === "auto" ? "自动发布" : "仅填充"}
+        </Button>
+      )}
 
       <ExtraInfoConfig platformInfo={platformInfo} syncData={syncData} />
     </div>

@@ -1,5 +1,5 @@
 import { Storage } from "@plasmohq/storage";
-import { getAllAccountInfo } from "~sync/account";
+import { getAllAccountInfo, refreshAccountInfo } from "~sync/account";
 import {
   // injectScriptsToTabs,
   type SyncData,
@@ -8,7 +8,6 @@ import {
   getPlatformInfos,
 } from "~sync/common";
 import QuantumEntanglementKeepAlive from "../utils/keep-alive";
-import { linkExtensionMessageHandler, starter } from "./services/api";
 import {
   addTabsManagerMessages,
   tabsManagerHandleTabRemoved,
@@ -21,33 +20,56 @@ const storage = new Storage({
   area: "local",
 });
 
-async function initDefaultTrustedDomains() {
-  const trustedDomains = await storage.get<Array<{ id: string; domain: string }>>("trustedDomains");
-  if (!trustedDomains) {
-    await storage.set("trustedDomains", [
-      {
-        id: crypto.randomUUID(),
-        domain: "multipost.app",
-      },
-    ]);
+async function initLocalSecurityState() {
+  const trustedDomains = (await storage.get<Array<{ id: string; domain: string }>>("trustedDomains")) || [];
+  const localDomains = trustedDomains.filter(({ domain }) => domain !== "multipost.app" && !domain.endsWith(".multipost.app"));
+  await storage.set("trustedDomains", localDomains);
+
+  // Legacy SaaS credentials are not used by the standalone fork.
+  await storage.remove("apiKey");
+  await storage.remove("extensionClientId");
+}
+
+async function closeMatrixSessionOptionsTabs() {
+  const accountId = await storage.get<string>("matrixSessionAccountId");
+  if (!accountId) return;
+
+  const optionsUrl = chrome.runtime.getURL("options.html");
+  const tabs = await chrome.tabs.query({});
+  const ids = tabs
+    .filter((tab) => typeof tab.id === "number" && !!tab.url && tab.url.startsWith(optionsUrl))
+    .map((tab) => tab.id as number);
+
+  if (ids.length) {
+    await chrome.tabs.remove(ids).catch(() => undefined);
   }
 }
 
-chrome.runtime.onInstalled.addListener((object) => {
-  if (object.reason === chrome.runtime.OnInstalledReason.INSTALL) {
-    chrome.tabs.create({ url: "https://multipost.app/on-install" });
-  }
-  initDefaultTrustedDomains();
+function scheduleMatrixSessionCleanup() {
+  void closeMatrixSessionOptionsTabs();
+  setTimeout(() => void closeMatrixSessionOptionsTabs(), 300);
+  setTimeout(() => void closeMatrixSessionOptionsTabs(), 1200);
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  void initLocalSecurityState();
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+  scheduleMatrixSessionCleanup();
 });
+
+chrome.runtime.onStartup.addListener(() => {
+  scheduleMatrixSessionCleanup();
+});
+
+initLocalSecurityState();
+scheduleMatrixSessionCleanup();
 
 // Listen Message || 监听消息 || START
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   const handled =
     defaultMessageHandler(request, sender, sendResponse) ||
     tabsManagerMessageHandler(request, sender, sendResponse) ||
-    trustDomainMessageHandler(request, sender, sendResponse) ||
-    linkExtensionMessageHandler(request, sender, sendResponse);
+    trustDomainMessageHandler(request, sender, sendResponse);
   return handled;
 });
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -61,7 +83,117 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 // Message Handler || 消息处理器 || START
 let currentSyncData: SyncData | null = null;
 let currentPublishPopup: chrome.windows.Window | null = null;
+
+const SESSION_MANAGER_BASE_URL = "http://127.0.0.1:2663";
+const MATRIX_ACCOUNT_REVERIFY_MS = 5 * 60 * 1000;
+let matrixTaskBusy = false;
+let matrixAccountVerifiedAt = 0;
+
+async function sendMatrixReceipt(taskId: string, body: Record<string, unknown>) {
+  await fetch(`${SESSION_MANAGER_BASE_URL}/api/tasks/${encodeURIComponent(taskId)}/receipt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function ensureMatrixSessionReady(): Promise<string | null> {
+  const accountId = await storage.get<string>("matrixSessionAccountId");
+  if (!accountId) return null;
+
+  const accountResponse = await fetch(`${SESSION_MANAGER_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}`, {
+    cache: "no-store",
+  }).catch(() => null);
+  if (!accountResponse?.ok) return null;
+
+  const account = await accountResponse.json();
+  const now = Date.now();
+  const shouldVerify = account.status !== "connected" || !matrixAccountVerifiedAt || now - matrixAccountVerifiedAt >= MATRIX_ACCOUNT_REVERIFY_MS;
+
+  if (shouldVerify) {
+    const info = await refreshAccountInfo(account.platform).catch(() => null);
+    if (!info?.username) return null;
+
+    const updateResponse = await fetch(`${SESSION_MANAGER_BASE_URL}/api/accounts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: account.id,
+        platform: account.platform,
+        platformLabel: account.platformLabel,
+        label: info.username,
+        username: info.username,
+        purpose: account.purpose,
+        owner: account.owner,
+        status: "connected",
+        homeUrl: account.homeUrl,
+      }),
+    }).catch(() => null);
+    if (!updateResponse?.ok) return null;
+    matrixAccountVerifiedAt = now;
+  }
+
+  const readyResponse = await fetch(`${SESSION_MANAGER_BASE_URL}/api/sessions/${encodeURIComponent(accountId)}/ready`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  }).catch(() => null);
+  if (!readyResponse?.ok) return null;
+
+  return accountId;
+}
+
+async function heartbeatMatrixSession() {
+  await ensureMatrixSessionReady().catch(() => undefined);
+}
+
+async function pollMatrixTaskQueue() {
+  if (matrixTaskBusy) return;
+  const accountId = await ensureMatrixSessionReady().catch(() => null);
+  if (!accountId) return;
+
+  matrixTaskBusy = true;
+  try {
+    const response = await fetch(
+      `${SESSION_MANAGER_BASE_URL}/api/tasks/next?accountId=${encodeURIComponent(accountId)}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) return;
+    const body = await response.json();
+    const task = body?.task;
+    if (!task) return;
+
+    try {
+      const syncData = task.payload?.syncData as SyncData;
+      if (!syncData?.platforms?.length) {
+        throw new Error("Task payload missing syncData/platforms");
+      }
+      const tabs = await createTabsForPlatforms(syncData);
+      await sendMatrixReceipt(task.id, {
+        status: "dispatched",
+        accountId,
+        tabs: tabs.map((item) => ({ id: item.tab.id, url: item.tab.url })),
+      });
+    } catch (error) {
+      await sendMatrixReceipt(task.id, {
+        status: "failed",
+        accountId,
+        error: String(error instanceof Error ? error.message : error),
+      });
+    }
+  } catch {
+    // Session Manager may be offline; retry on the next interval.
+  } finally {
+    matrixTaskBusy = false;
+  }
+}
+
 const defaultMessageHandler = (request, _sender, sendResponse) => {
+  if (request.action === "MATRIX_SESSION_BOUND") {
+    scheduleMatrixSessionCleanup();
+    sendResponse({ status: "ok" });
+    return true;
+  }
   if (request.action === "MULTIPOST_EXTENSION_CHECK_SERVICE_STATUS") {
     sendResponse({ extensionId: chrome.runtime.id });
     return true;
@@ -136,12 +268,6 @@ const defaultMessageHandler = (request, _sender, sendResponse) => {
             })),
           });
 
-          // for (const t of tabs) {
-          //   if (t.tab.id) {
-          //     await chrome.tabs.update(t.tab.id, { active: true });
-          //     await new Promise((resolve) => setTimeout(resolve, 2000));
-          //   }
-          // }
           if (currentPublishPopup) {
             await chrome.windows.update(currentPublishPopup.id, { focused: true });
           }
@@ -153,21 +279,20 @@ const defaultMessageHandler = (request, _sender, sendResponse) => {
             })),
           });
         } catch (error) {
-          // Do not sendResponse here: the publish popup's handlePublishComplete treats ANY
-          // callback response as "publish complete", so an error payload would be mis-read as success.
-          // Preserve original behavior (log only); success path above sends the tabs response.
           console.error("创建标签页或分组时出错:", error);
         }
       })();
     }
-    // Claim this action regardless of platform count, mirroring the original blanket return-true:
-    // the success path responds asynchronously; error/empty paths intentionally send no response.
     return true;
   }
   return false;
 };
-starter(1000 * 30);
 // Message Handler || 消息处理器 || END
+
+setInterval(pollMatrixTaskQueue, 5000);
+setInterval(heartbeatMatrixSession, 10000);
+heartbeatMatrixSession();
+pollMatrixTaskQueue();
 
 // Keep Alive || 保活机制 || START
 const quantumKeepAlive = new QuantumEntanglementKeepAlive();
