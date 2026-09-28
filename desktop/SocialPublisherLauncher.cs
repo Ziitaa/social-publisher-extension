@@ -10,6 +10,7 @@ internal static class Program
     private const string ExtensionId = "clbmikkopbocinhhmckloddbepkmccce";
     private const string HealthUrl = "http://127.0.0.1:2663/api/health";
     private const string LauncherMutexName = "SocialPublisherDesktopLauncher";
+    private const string ProductName = "矩阵发布工作台";
 
     [STAThread]
     private static void Main()
@@ -40,14 +41,14 @@ internal static class Program
 
                 if (!Directory.Exists(extensionDir))
                 {
-                    ShowError("Social Publisher 还没有构建完成。请先运行一次安装脚本。");
+                    ShowError("发布工作台还没有构建完成。请先运行一次安装脚本。");
                     return;
                 }
 
                 string chrome = FindChrome(browserRoot);
                 if (string.IsNullOrEmpty(chrome))
                 {
-                    ShowError("没有找到 Social Publisher 专用浏览器。请先运行一次安装脚本。");
+                    ShowError("没有找到发布工作台专用浏览器。请先运行一次安装脚本。");
                     return;
                 }
 
@@ -77,7 +78,7 @@ internal static class Program
             }
             catch (Exception ex)
             {
-                ShowError("Social Publisher 启动失败：\n" + ex.Message);
+                ShowError("启动失败：\n" + ex.Message);
             }
             finally
             {
@@ -148,7 +149,7 @@ internal static class Program
             string escaped = message.Replace("'", "''").Replace("\r", " ").Replace("\n", " ");
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = "powershell.exe";
-            psi.Arguments = "-NoProfile -Command " + Quote("Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('" + escaped + "','Social Publisher')");
+            psi.Arguments = "-NoProfile -Command " + Quote("Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('" + escaped + "','" + ProductName + "')");
             psi.UseShellExecute = false;
             psi.CreateNoWindow = true;
             Process process = Process.Start(psi);
