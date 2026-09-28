@@ -1,8 +1,8 @@
 import { Button, Card, CardBody, Checkbox, Chip, Input, Select, SelectItem } from "@heroui/react";
 import { Play, Plus, RefreshCw, Trash2, UsersRound } from "lucide-react";
-import { Icon } from "@iconify/react";
 import type React from "react";
 import { listManagedAccounts, saveManagedAccounts } from "~accounts/pool";
+import PlatformIcon from "~components/PlatformIcon";
 import { useEffect, useMemo, useState } from "react";
 import { refreshAccountInfoMap } from "~sync/account";
 import { getPlatformInfos } from "~sync/common";
@@ -180,7 +180,7 @@ const AccountManagerTab: React.FC = () => {
 
           {!online && (
             <div className="rounded-xl border border-warning-200 bg-warning-50 p-3 text-sm">
-              本地发布服务未连接，请重新打开 Social Publisher；如果仍未恢复再联系维护人员。
+              本地发布服务未连接，请重新打开发布工作台；如果仍未恢复再联系维护人员。
             </div>
           )}
 
@@ -196,13 +196,12 @@ const AccountManagerTab: React.FC = () => {
                 <SelectItem
                   key={item.key}
                   startContent={
-                    <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden">
-                      {item.iconifyIcon ? (
-                        <Icon icon={item.iconifyIcon} className="h-3.5 w-3.5 shrink-0" />
-                      ) : item.faviconUrl ? (
-                        <img src={item.faviconUrl} alt="" className="h-3.5 w-3.5 shrink-0 object-contain" />
-                      ) : null}
-                    </span>
+                    <PlatformIcon
+                      platformKey={item.key}
+                      iconifyIcon={item.iconifyIcon}
+                      faviconUrl={item.faviconUrl}
+                      size="sm"
+                    />
                   }>
                   {item.label}
                 </SelectItem>
@@ -299,7 +298,7 @@ const AccountManagerTab: React.FC = () => {
         <Card className="shadow-none bg-default-50">
           <CardBody className="items-center gap-2 py-12 text-center">
             <UsersRound className="size-8 text-default-400" />
-            <div className="font-medium">{online ? "还没有账号" : "等待 Session Manager"}</div>
+            <div className="font-medium">{online ? "还没有账号" : "等待本地服务"}</div>
             <div className="text-sm text-default-500">
               {online ? "选择一个平台并接入账号，完成扫码后会自动加入账号矩阵。" : "启动后账号池会自动连接本地服务。"}
             </div>
@@ -334,7 +333,7 @@ const AccountManagerTab: React.FC = () => {
                           setMessage(`正在打开 ${account.label}…`);
                           try {
                             await launchSessionAccount(account.id);
-                            setMessage(account.status === "connected" ? "账号窗口已打开。" : "请在账号窗口完成扫码或登录，系统会自动识别账号。" );
+                            setMessage(account.status === "connected" ? "账号窗口已打开。" : "请在账号窗口完成扫码或登录，系统会自动识别账号。");
                             await reload();
                           } catch (error) {
                             setMessage(String(error instanceof Error ? error.message : error));
