@@ -30,12 +30,39 @@ async function initLocalSecurityState() {
   await storage.remove("extensionClientId");
 }
 
+async function closeMatrixSessionOptionsTabs() {
+  const accountId = await storage.get<string>("matrixSessionAccountId");
+  if (!accountId) return;
+
+  const optionsUrl = chrome.runtime.getURL("options.html");
+  const tabs = await chrome.tabs.query({});
+  const ids = tabs
+    .filter((tab) => typeof tab.id === "number" && !!tab.url && tab.url.startsWith(optionsUrl))
+    .map((tab) => tab.id as number);
+
+  if (ids.length) {
+    await chrome.tabs.remove(ids).catch(() => undefined);
+  }
+}
+
+function scheduleMatrixSessionCleanup() {
+  void closeMatrixSessionOptionsTabs();
+  setTimeout(() => void closeMatrixSessionOptionsTabs(), 300);
+  setTimeout(() => void closeMatrixSessionOptionsTabs(), 1200);
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   void initLocalSecurityState();
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+  scheduleMatrixSessionCleanup();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  scheduleMatrixSessionCleanup();
 });
 
 initLocalSecurityState();
+scheduleMatrixSessionCleanup();
 
 // Listen Message || 监听消息 || START
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -162,6 +189,11 @@ async function pollMatrixTaskQueue() {
 }
 
 const defaultMessageHandler = (request, _sender, sendResponse) => {
+  if (request.action === "MATRIX_SESSION_BOUND") {
+    scheduleMatrixSessionCleanup();
+    sendResponse({ status: "ok" });
+    return true;
+  }
   if (request.action === "MULTIPOST_EXTENSION_CHECK_SERVICE_STATUS") {
     sendResponse({ extensionId: chrome.runtime.id });
     return true;
@@ -236,12 +268,6 @@ const defaultMessageHandler = (request, _sender, sendResponse) => {
             })),
           });
 
-          // for (const t of tabs) {
-          //   if (t.tab.id) {
-          //     await chrome.tabs.update(t.tab.id, { active: true });
-          //     await new Promise((resolve) => setTimeout(resolve, 2000));
-          //   }
-          // }
           if (currentPublishPopup) {
             await chrome.windows.update(currentPublishPopup.id, { focused: true });
           }
@@ -253,15 +279,10 @@ const defaultMessageHandler = (request, _sender, sendResponse) => {
             })),
           });
         } catch (error) {
-          // Do not sendResponse here: the publish popup's handlePublishComplete treats ANY
-          // callback response as "publish complete", so an error payload would be mis-read as success.
-          // Preserve original behavior (log only); success path above sends the tabs response.
           console.error("创建标签页或分组时出错:", error);
         }
       })();
     }
-    // Claim this action regardless of platform count, mirroring the original blanket return-true:
-    // the success path responds asynchronously; error/empty paths intentionally send no response.
     return true;
   }
   return false;
