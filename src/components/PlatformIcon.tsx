@@ -28,6 +28,32 @@ const BRAND_ICON_BY_KEY: Record<string, string> = {
   webhook: "mdi:webhook",
 };
 
+const BRAND_COLOR_BY_KEY: Record<string, string> = {
+  douyin: "#111111",
+  rednote: "#ff2442",
+  tiktok: "#111111",
+  x: "#111111",
+  bilibili: "#00aeec",
+  weixinchannel: "#07c160",
+  weixin: "#07c160",
+  weibo: "#e6162d",
+  kuaishou: "#ff4906",
+  zhihu: "#0084ff",
+  toutiao: "#f04142",
+  toutiaohao: "#f04142",
+  baijiahao: "#2932e1",
+  instagram: "#e4405f",
+  facebook: "#1877f2",
+  linkedin: "#0a66c2",
+  youtube: "#ff0000",
+  pinterest: "#bd081c",
+  threads: "#111111",
+  reddit: "#ff4500",
+  bluesky: "#0285ff",
+  substack: "#ff6719",
+  qie: "#12b7f5",
+};
+
 type PlatformIconProps = {
   platformKey: string;
   iconifyIcon?: string;
@@ -37,13 +63,14 @@ type PlatformIconProps = {
 
 const PlatformIcon: React.FC<PlatformIconProps> = ({ platformKey, iconifyIcon, faviconUrl, size = "md" }) => {
   const icon = BRAND_ICON_BY_KEY[platformKey] || iconifyIcon;
+  const color = BRAND_COLOR_BY_KEY[platformKey];
   const boxClass = size === "sm" ? "size-4" : "size-6";
   const iconClass = size === "sm" ? "size-3.5" : "size-5";
 
   return (
     <span className={`flex ${boxClass} shrink-0 items-center justify-center overflow-hidden rounded-md`} aria-hidden="true">
       {icon ? (
-        <Icon icon={icon} className={iconClass} />
+        <Icon icon={icon} className={iconClass} style={color ? { color } : undefined} />
       ) : faviconUrl ? (
         <img src={faviconUrl} alt="" className={`${iconClass} shrink-0 object-contain`} />
       ) : (
