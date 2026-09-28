@@ -64,17 +64,39 @@ type PlatformIconProps = {
 const PlatformIcon: React.FC<PlatformIconProps> = ({ platformKey, iconifyIcon, faviconUrl, size = "md" }) => {
   const icon = BRAND_ICON_BY_KEY[platformKey] || iconifyIcon;
   const color = BRAND_COLOR_BY_KEY[platformKey];
-  const boxClass = size === "sm" ? "size-4" : "size-6";
-  const iconClass = size === "sm" ? "size-3.5" : "size-5";
+  const boxPx = size === "sm" ? 16 : 24;
+  const iconPx = size === "sm" ? 14 : 20;
+
+  const boxStyle: React.CSSProperties = {
+    width: boxPx,
+    height: boxPx,
+    minWidth: boxPx,
+    minHeight: boxPx,
+    maxWidth: boxPx,
+    maxHeight: boxPx,
+    flex: `0 0 ${boxPx}px`,
+    overflow: "hidden",
+  };
+
+  const iconStyle: React.CSSProperties = {
+    width: iconPx,
+    height: iconPx,
+    minWidth: iconPx,
+    minHeight: iconPx,
+    maxWidth: iconPx,
+    maxHeight: iconPx,
+    objectFit: "contain",
+    ...(color ? { color } : {}),
+  };
 
   return (
-    <span className={`flex ${boxClass} shrink-0 items-center justify-center overflow-hidden rounded-md`} aria-hidden="true">
+    <span className="inline-flex shrink-0 items-center justify-center rounded-md" style={boxStyle} aria-hidden="true">
       {icon ? (
-        <Icon icon={icon} className={iconClass} style={color ? { color } : undefined} />
+        <Icon icon={icon} style={iconStyle} />
       ) : faviconUrl ? (
-        <img src={faviconUrl} alt="" className={`${iconClass} shrink-0 object-contain`} />
+        <img src={faviconUrl} alt="" style={iconStyle} />
       ) : (
-        <span className={`${iconClass} rounded bg-default-200`} />
+        <span className="rounded bg-default-200" style={iconStyle} />
       )}
     </span>
   );
