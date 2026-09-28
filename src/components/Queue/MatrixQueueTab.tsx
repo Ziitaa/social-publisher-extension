@@ -10,9 +10,9 @@ import {
   Textarea,
 } from "@heroui/react";
 import { Play, RefreshCw, Send, Upload, UsersRound } from "lucide-react";
-import { Icon } from "@iconify/react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import PlatformIcon from "~components/PlatformIcon";
 import {
   enqueueMatrixBatch,
   launchSessionAccount,
@@ -123,24 +123,27 @@ const MatrixQueueTab: React.FC = () => {
     };
 
     const decorate = (items: PlatformInfo[]) =>
-      items
-        .map((platformInfo) => ({
-          platformInfo,
-          accounts: accounts.filter((account) => account.platform === platformInfo.accountKey),
-        }));
+      items.map((platformInfo) => ({
+        platformInfo,
+        accounts: accounts.filter((account) => account.platform === platformInfo.accountKey),
+      }));
 
     const domestic = platforms.filter((item) => item.tags?.includes("CN"));
     const international = platforms.filter((item) => !item.tags?.includes("CN"));
 
-    const domesticCommon = decorate(domestic.filter((item) => domesticPriority.includes(item.accountKey)))
-      .sort((a, b) => rank(a.platformInfo.accountKey, domesticPriority) - rank(b.platformInfo.accountKey, domesticPriority));
-    const domesticOther = decorate(domestic.filter((item) => !domesticPriority.includes(item.accountKey)))
-      .sort((a, b) => a.platformInfo.platformName.localeCompare(b.platformInfo.platformName, "zh-CN"));
+    const domesticCommon = decorate(domestic.filter((item) => domesticPriority.includes(item.accountKey))).sort(
+      (a, b) => rank(a.platformInfo.accountKey, domesticPriority) - rank(b.platformInfo.accountKey, domesticPriority),
+    );
+    const domesticOther = decorate(domestic.filter((item) => !domesticPriority.includes(item.accountKey))).sort((a, b) =>
+      a.platformInfo.platformName.localeCompare(b.platformInfo.platformName, "zh-CN"),
+    );
 
-    const internationalCommon = decorate(international.filter((item) => internationalPriority.includes(item.accountKey)))
-      .sort((a, b) => rank(a.platformInfo.accountKey, internationalPriority) - rank(b.platformInfo.accountKey, internationalPriority));
-    const internationalOther = decorate(international.filter((item) => !internationalPriority.includes(item.accountKey)))
-      .sort((a, b) => a.platformInfo.platformName.localeCompare(b.platformInfo.platformName, "en"));
+    const internationalCommon = decorate(international.filter((item) => internationalPriority.includes(item.accountKey))).sort(
+      (a, b) => rank(a.platformInfo.accountKey, internationalPriority) - rank(b.platformInfo.accountKey, internationalPriority),
+    );
+    const internationalOther = decorate(international.filter((item) => !internationalPriority.includes(item.accountKey))).sort((a, b) =>
+      a.platformInfo.platformName.localeCompare(b.platformInfo.platformName, "en"),
+    );
 
     return [
       { key: "domestic-common", title: "国内常用", items: domesticCommon },
@@ -262,9 +265,7 @@ const MatrixQueueTab: React.FC = () => {
         sharedVariants,
         platformByAccount,
       });
-      setMessage(
-        `已加入 ${accountIds.length} 个账号任务。${unsupported.length ? ` 未支持：${unsupported.join("、")}` : ""}`,
-      );
+      setMessage(`已加入 ${accountIds.length} 个账号任务。${unsupported.length ? ` 未支持：${unsupported.join("、")}` : ""}`);
       await reload();
     } catch (error) {
       setMessage(String(error instanceof Error ? error.message : error));
@@ -303,12 +304,7 @@ const MatrixQueueTab: React.FC = () => {
               <SelectItem key="b2b">经销商 / B2B</SelectItem>
               <SelectItem key="custom">自定义</SelectItem>
             </Select>
-            <Input
-              label="推广任务名称"
-              placeholder="例如：销售主管招聘 09/21"
-              value={campaignName}
-              onValueChange={setCampaignName}
-            />
+            <Input label="推广任务名称" value={campaignName} onValueChange={setCampaignName} />
             <Select
               label="内容类型"
               selectedKeys={[contentType]}
@@ -458,21 +454,15 @@ const MatrixQueueTab: React.FC = () => {
                         className={`rounded-xl border p-3 ${items.length ? "border-divider" : "border-divider bg-default-50 opacity-75"}`}>
                         <div className="mb-3 flex items-center justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-2">
-                            <div className="flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default-100">
-                              {platformInfo.iconifyIcon ? (
-                                <Icon icon={platformInfo.iconifyIcon} className="!size-5" />
-                              ) : platformInfo.faviconUrl ? (
-                                <img
-                                  src={platformInfo.faviconUrl}
-                                  alt=""
-                                  className="!h-5 !w-5 max-h-5 max-w-5 object-contain"
-                                />
-                              ) : null}
-                            </div>
+                            <PlatformIcon
+                              platformKey={platformInfo.accountKey}
+                              iconifyIcon={platformInfo.iconifyIcon}
+                              faviconUrl={platformInfo.faviconUrl}
+                            />
                             <div className="min-w-0">
                               <div className="truncate font-medium">{platformInfo.platformName}</div>
                               <div className="text-xs text-default-500">
-                                {items.length ? `${items.length} 个账号 · 已选 ${selectedCount}` : "0 个账号 · 去账号池添加"}
+                                {items.length ? `${items.length} 个账号 · 已选 ${selectedCount}` : "0 个账号 · 去账号矩阵接入"}
                               </div>
                             </div>
                           </div>
@@ -485,9 +475,7 @@ const MatrixQueueTab: React.FC = () => {
                                 const ids = items.map((item) => item.id);
                                 const allSelected = ids.every((id) => selected.includes(id));
                                 setSelected((prev) =>
-                                  allSelected
-                                    ? prev.filter((id) => !ids.includes(id))
-                                    : [...new Set([...prev, ...ids])],
+                                  allSelected ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])],
                                 );
                               }}>
                               {selectedCount === items.length ? "取消全选" : "全选"}
@@ -508,7 +496,7 @@ const MatrixQueueTab: React.FC = () => {
                                   />
                                   <div>
                                     <div className="text-sm font-medium">{account.label}</div>
-                                    <div className="text-xs text-default-500">{account.username || "未填写用户名"}</div>
+                                    <div className="text-xs text-default-500">{account.username || "等待账号识别"}</div>
                                   </div>
                                 </div>
                                 <Chip
@@ -522,7 +510,7 @@ const MatrixQueueTab: React.FC = () => {
                           </div>
                         ) : (
                           <div className="rounded-lg bg-default-100 p-3 text-xs text-default-500">
-                            此平台已支持发布，但还没有加入任何账号。
+                            此平台已支持发布，但还没有接入账号。
                           </div>
                         )}
                       </div>
