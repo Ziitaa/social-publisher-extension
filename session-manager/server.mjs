@@ -386,7 +386,7 @@ const server = http.createServer(async (req, res) => {
         createdAt: now,
       };
 
-      const tasks = accountIds.map((accountId) => {
+      const tasks = accountIds.map((accountId, index) => {
         const account = state.accounts.find((item) => item.id === accountId);
         if (!account) throw new Error(`Unknown account: ${accountId}`);
         const platformInfo = platformByAccount[accountId];
