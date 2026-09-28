@@ -9,6 +9,7 @@ export interface SessionManagerAccount {
   status?: string;
   homeUrl?: string;
   sessionStatus?: "offline" | "starting" | "ready" | "unknown";
+  runtimeStatus?: "offline" | "starting" | "ready" | "unknown";
   createdAt?: number;
   updatedAt?: number;
 }
@@ -59,12 +60,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function listSessionAccountsRaw(): Promise<SessionManagerAccount[]> {
+  return request("/api/accounts");
+}
+
 export async function getSessionManagerHealth(): Promise<{ ok: boolean; version: string }> {
   return request("/api/health");
 }
 
 export async function listSessionAccounts(): Promise<SessionManagerAccount[]> {
-  return request("/api/accounts");
+  const accounts = await listSessionAccountsRaw();
+  return accounts.map((account) => ({
+    ...account,
+    runtimeStatus: account.sessionStatus,
+    // A closed browser does not mean the saved platform login has been lost.
+    // Treat a previously verified profile as usable; the runtime is relaunched on demand.
+    sessionStatus: account.status === "connected" && account.sessionStatus === "offline" ? "ready" : account.sessionStatus,
+  }));
 }
 
 export async function upsertSessionAccount(account: SessionManagerAccount): Promise<SessionManagerAccount> {
@@ -86,10 +98,19 @@ export async function enqueueMatrixTasks(
   accountIds: string[],
   payloadByAccount: Record<string, MatrixTaskPayload>,
 ): Promise<MatrixTask[]> {
-  return request("/api/tasks", {
+  const tasks = await request<MatrixTask[]>("/api/tasks", {
     method: "POST",
     body: JSON.stringify({ accountIds, payloadByAccount }),
   });
+
+  const rawAccounts = await listSessionAccountsRaw().catch(() => []);
+  const offlineIds = accountIds.filter((id) => {
+    const account = rawAccounts.find((item) => item.id === id);
+    return account?.sessionStatus !== "ready" && account?.sessionStatus !== "starting";
+  });
+  await Promise.allSettled(offlineIds.map((id) => launchSessionAccount(id)));
+
+  return tasks;
 }
 
 export async function listMatrixTasks(): Promise<MatrixTask[]> {
@@ -105,10 +126,23 @@ export async function enqueueMatrixBatch(input: {
   sharedVariants?: Array<{ title?: string; content?: string }>;
   platformByAccount: Record<string, unknown>;
 }): Promise<MatrixTask[]> {
-  return request("/api/tasks/batch", {
+  const tasks = await request<MatrixTask[]>("/api/tasks/batch", {
     method: "POST",
     body: JSON.stringify(input),
   });
+
+  // Task creation is the send action. If a selected account browser is not
+  // currently running, relaunch its isolated profile so it can consume the queue.
+  // Cookies/profile data are preserved, so a previously connected account should
+  // not need to scan/login again unless the platform itself expired the session.
+  const rawAccounts = await listSessionAccountsRaw().catch(() => []);
+  const offlineIds = input.accountIds.filter((id) => {
+    const account = rawAccounts.find((item) => item.id === id);
+    return account?.sessionStatus !== "ready" && account?.sessionStatus !== "starting";
+  });
+  await Promise.allSettled(offlineIds.map((id) => launchSessionAccount(id)));
+
+  return tasks;
 }
 
 export async function listAccountGroups(): Promise<AccountGroup[]> {
