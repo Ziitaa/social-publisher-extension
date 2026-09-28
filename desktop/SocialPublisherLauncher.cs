@@ -62,15 +62,18 @@ internal static class Program
                 psi.Arguments = string.Join(" ", new string[]
                 {
                     Quote("--user-data-dir=" + controlProfile),
+                    Quote("--disable-extensions-except=" + extensionDir),
                     Quote("--load-extension=" + extensionDir),
                     "--no-first-run",
                     "--no-default-browser-check",
                     "--disable-session-crashed-bubble",
                     "--disable-background-mode",
-                    Quote("--app=" + optionsUrl)
+                    "--new-window",
+                    Quote(optionsUrl)
                 });
 
                 Process.Start(psi);
+                Thread.Sleep(1500);
             }
             catch (Exception ex)
             {
