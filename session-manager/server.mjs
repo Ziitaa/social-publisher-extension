@@ -1,7 +1,7 @@
 import http from "node:http";
 import { spawn } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -112,15 +112,27 @@ function findChrome() {
   const sessionBrowser = findChromeRecursively(path.join(runtimeRoot, "browser"));
   if (sessionBrowser) return sessionBrowser;
 
-  const candidates = [
-    process.env.SOCIAL_PUBLISHER_CHROME,
-    process.env.CHROME_PATH,
-  ].filter(Boolean);
+  const candidates = [process.env.SOCIAL_PUBLISHER_CHROME, process.env.CHROME_PATH].filter(Boolean);
   return candidates.find((candidate) => existsSync(candidate));
 }
 
 function sessionDirFor(accountId) {
   return path.join(sessionsRoot, accountId);
+}
+
+async function clearRestoredTabs(profileRoot) {
+  const defaultDir = path.join(profileRoot, "Default");
+  const targets = [
+    path.join(defaultDir, "Sessions"),
+    path.join(defaultDir, "Current Session"),
+    path.join(defaultDir, "Current Tabs"),
+    path.join(defaultDir, "Last Session"),
+    path.join(defaultDir, "Last Tabs"),
+  ];
+
+  for (const target of targets) {
+    await rm(target, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 async function launchAccountSession(accountId) {
@@ -133,6 +145,7 @@ async function launchAccountSession(accountId) {
 
   const sessionDir = sessionDirFor(accountId);
   await mkdir(sessionDir, { recursive: true });
+  await clearRestoredTabs(sessionDir);
 
   state.sessions[accountId] = {
     status: "starting",
@@ -146,9 +159,13 @@ async function launchAccountSession(accountId) {
     chrome,
     [
       `--user-data-dir=${sessionDir}`,
+      `--disable-extensions-except=${extensionDir}`,
       `--load-extension=${extensionDir}`,
       "--no-first-run",
       "--no-default-browser-check",
+      "--disable-session-crashed-bubble",
+      "--disable-background-mode",
+      "--new-window",
       bindUrl,
     ],
     {
@@ -308,12 +325,9 @@ const server = http.createServer(async (req, res) => {
       sendHtml(
         res,
         200,
-        `<!doctype html><html><head><meta charset="utf-8"><title>Social Publisher Session</title></head>
+        `<!doctype html><html><head><meta charset="utf-8"><title>账号登录</title></head>
         <body style="font-family:system-ui;padding:32px">
-          <h2>Social Publisher</h2>
-          <p>正在绑定账号会话：<strong>${accountId}</strong></p>
-          <p>请保持此窗口打开，完成该平台账号登录。绑定完成后扩展会自动接收发布任务。</p>
-          <script>setTimeout(()=>location.reload(),5000)</script>
+          <p>正在打开账号登录页…</p>
         </body></html>`,
       );
       return;
