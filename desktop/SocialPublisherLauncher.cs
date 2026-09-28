@@ -54,6 +54,7 @@ internal static class Program
 
                 EnsureService(runService);
                 Directory.CreateDirectory(controlProfile);
+                ClearRestoredTabs(controlProfile);
 
                 string optionsUrl = "chrome-extension://" + ExtensionId + "/options.html";
                 ProcessStartInfo psi = new ProcessStartInfo();
@@ -87,6 +88,54 @@ internal static class Program
                     try { mutex.ReleaseMutex(); } catch { }
                 }
             }
+        }
+    }
+
+    private static void ClearRestoredTabs(string profileRoot)
+    {
+        string defaultDir = Path.Combine(profileRoot, "Default");
+        string[] directories =
+        {
+            Path.Combine(defaultDir, "Sessions")
+        };
+        string[] files =
+        {
+            Path.Combine(defaultDir, "Current Session"),
+            Path.Combine(defaultDir, "Current Tabs"),
+            Path.Combine(defaultDir, "Last Session"),
+            Path.Combine(defaultDir, "Last Tabs")
+        };
+
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            bool pending = false;
+
+            foreach (string directory in directories)
+            {
+                try
+                {
+                    if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                }
+                catch
+                {
+                    pending = true;
+                }
+            }
+
+            foreach (string file in files)
+            {
+                try
+                {
+                    if (File.Exists(file)) File.Delete(file);
+                }
+                catch
+                {
+                    pending = true;
+                }
+            }
+
+            if (!pending) return;
+            Thread.Sleep(250);
         }
     }
 
